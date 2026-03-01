@@ -3,26 +3,6 @@
  * Manually mirrored from OpenClaw source — NOT imported.
  */
 
-export interface GatewayStatus {
-  running: boolean
-  port: number
-  pid?: number
-  uptime?: number
-  url?: string
-}
-
-export interface StatusSummary {
-  gateway: GatewayStatus
-  daemon?: {
-    installed: boolean
-    type?: 'launchd' | 'systemd' | 'pm2' | 'none'
-    running?: boolean
-  }
-  channels: Record<string, ChannelHealthSummary>
-  version?: string
-  nodeVersion?: string
-}
-
 export interface ChannelHealthSummary {
   accountId?: string
   configured?: boolean
@@ -32,20 +12,78 @@ export interface ChannelHealthSummary {
 }
 
 export interface AgentHeartbeatSummary {
+  agentId: string
+  isDefault?: boolean
+  heartbeat?: {
+    enabled: boolean
+    every: string
+    everyMs: number
+  }
+  sessions?: {
+    path: string
+    count: number
+    recent: SessionInfo[]
+  }
+}
+
+export interface SessionInfo {
+  key: string
   agentId?: string
-  name?: string
-  lastSeenMs?: number
-  sessions?: number
+  kind?: string
+  sessionId?: string
+  updatedAt: number
+  age: number
+  model?: string
+  contextTokens?: number
+  percentUsed?: number
+  totalTokens?: number
+  remainingTokens?: number
 }
 
 export interface HealthSummary {
   ok: boolean
   ts: number
+  durationMs?: number
   channels: Record<string, ChannelHealthSummary>
   channelOrder?: string[]
   channelLabels?: Record<string, string>
-  agents?: Record<string, AgentHeartbeatSummary>
-  sessions?: number
+  heartbeatSeconds?: number
+  defaultAgentId?: string
+  agents?: AgentHeartbeatSummary[]
+  sessions?: {
+    path: string
+    count: number
+    recent: SessionInfo[]
+  }
+}
+
+export interface StatusSummary {
+  heartbeat?: {
+    defaultAgentId: string
+    agents: {
+      agentId: string
+      enabled: boolean
+      every: string
+      everyMs: number
+    }[]
+  }
+  channelSummary?: unknown[]
+  queuedSystemEvents?: unknown[]
+  sessions?: {
+    paths: string[]
+    count: number
+    defaults?: {
+      model: string
+      contextTokens: number
+    }
+    recent: SessionInfo[]
+    byAgent?: {
+      agentId: string
+      path: string
+      count: number
+      recent: SessionInfo[]
+    }[]
+  }
 }
 
 export interface EnvironmentInfo {
@@ -54,6 +92,7 @@ export interface EnvironmentInfo {
   nodePath?: string
   openclawInstalled: boolean
   openclawVersion?: string
+  openclawPath?: string
   gatewayRunning: boolean
   gatewayPort?: number
   daemonInstalled: boolean

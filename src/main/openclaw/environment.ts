@@ -1,4 +1,6 @@
 import { spawn } from 'node:child_process'
+import { createConnection } from 'node:net'
+import { DEFAULT_GATEWAY_PORT } from '@shared/constants'
 import type { EnvironmentInfo } from '@shared/openclaw-types'
 
 function runQuick(
@@ -50,6 +52,7 @@ export async function detectNodeJs(): Promise<{
 export async function detectOpenClaw(): Promise<{
   installed: boolean
   version?: string
+  path?: string
 }> {
   const result = await runQuick('openclaw', ['--version'])
   if (result.exitCode !== 0) {
@@ -58,27 +61,55 @@ export async function detectOpenClaw(): Promise<{
 
   // openclaw --version outputs something like "openclaw/1.2.3" or "1.2.3"
   const version = result.stdout.replace(/^openclaw\/?/i, '').trim()
-  return { installed: true, version }
+
+  const whichCmd = process.platform === 'win32' ? 'where' : 'which'
+  const pathResult = await runQuick(whichCmd, ['openclaw'])
+
+  return {
+    installed: true,
+    version,
+    path: pathResult.exitCode === 0 ? pathResult.stdout.split('\n')[0] : undefined,
+  }
+}
+
+function probePort(port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const socket = createConnection({ port, host: '127.0.0.1' }, () => {
+      socket.destroy()
+      resolve(true)
+    })
+    socket.on('error', () => resolve(false))
+    socket.setTimeout(2000, () => {
+      socket.destroy()
+      resolve(false)
+    })
+  })
 }
 
 export async function detectGateway(): Promise<{
   running: boolean
   port?: number
 }> {
+  // Try CLI status first
   const result = await runQuick('openclaw', ['gateway', 'status', '--json'])
-  if (result.exitCode !== 0) {
-    return { running: false }
+  if (result.exitCode === 0) {
+    try {
+      const status = JSON.parse(result.stdout)
+      if (status.gateway?.running) {
+        return { running: true, port: status.gateway.port }
+      }
+    } catch {
+      // fall through to probe
+    }
   }
 
-  try {
-    const status = JSON.parse(result.stdout)
-    return {
-      running: status.gateway?.running ?? false,
-      port: status.gateway?.port,
-    }
-  } catch {
-    return { running: false }
+  // Fallback: TCP probe (catches child-process-spawned gateways)
+  const port = DEFAULT_GATEWAY_PORT
+  if (await probePort(port)) {
+    return { running: true, port }
   }
+
+  return { running: false }
 }
 
 export async function detectDaemon(): Promise<{
@@ -113,6 +144,7 @@ export async function detectAll(): Promise<EnvironmentInfo> {
     nodePath: node.path,
     openclawInstalled: openclaw.installed,
     openclawVersion: openclaw.version,
+    openclawPath: openclaw.path,
     gatewayRunning: gateway.running,
     gatewayPort: gateway.port,
     daemonInstalled: daemon.installed,

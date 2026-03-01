@@ -22,7 +22,9 @@ export const IPC_CHANNELS = {
   // Gateway
   GATEWAY_CONNECT: 'gateway:connect',
   GATEWAY_DISCONNECT: 'gateway:disconnect',
+  GATEWAY_STOP: 'gateway:stop',
   GATEWAY_RPC_CALL: 'gateway:rpc-call',
+  GATEWAY_AUTH_TOKEN: 'gateway:auth-token',
 } as const
 
 export type IpcChannel = (typeof IPC_CHANNELS)[keyof typeof IPC_CHANNELS]

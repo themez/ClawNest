@@ -1,4 +1,4 @@
-import { Heart, RefreshCw, Users, MessageSquare } from 'lucide-react'
+import { Heart, RefreshCw, Bot, MessageSquare } from 'lucide-react'
 import type { HealthSummary } from '@shared/openclaw-types'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -7,8 +7,10 @@ function deriveOverallHealth(
   health: HealthSummary | null,
 ): 'healthy' | 'degraded' | 'unhealthy' | 'unknown' {
   if (!health) return 'unknown'
+  if (!health.ok) return 'unhealthy'
+
   const channels = Object.values(health.channels ?? {})
-  if (channels.length === 0) return 'unknown'
+  if (channels.length === 0) return 'healthy' // no channels configured is fine
 
   const allOk = channels.every((ch) => ch.configured && ch.linked)
   const anyOk = channels.some((ch) => ch.configured && ch.linked)
@@ -34,7 +36,8 @@ export function HealthSummaryCard({
 }) {
   const overall = deriveOverallHealth(health)
   const channelCount = Object.keys(health?.channels ?? {}).length
-  const sessionCount = health?.sessions ?? 0
+  const agentCount = health?.agents?.length ?? 0
+  const sessionCount = health?.sessions?.count ?? 0
 
   return (
     <Card>
@@ -60,9 +63,9 @@ export function HealthSummaryCard({
           <span className="ml-auto text-sm text-muted-foreground">{channelCount}</span>
         </div>
         <div className="flex items-center gap-2">
-          <Users className="h-4 w-4 text-muted-foreground" />
-          <span className="text-sm">Sessions</span>
-          <span className="ml-auto text-sm text-muted-foreground">{sessionCount}</span>
+          <Bot className="h-4 w-4 text-muted-foreground" />
+          <span className="text-sm">Agents</span>
+          <span className="ml-auto text-sm text-muted-foreground">{agentCount}</span>
         </div>
       </CardContent>
     </Card>

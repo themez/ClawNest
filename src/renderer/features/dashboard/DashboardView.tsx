@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
-import { Loader2, RefreshCw, Wifi, WifiOff } from 'lucide-react'
+import { ExternalLink, Loader2, RefreshCw, Wifi, WifiOff } from 'lucide-react'
 import type { HealthSummary, StatusSummary } from '@shared/openclaw-types'
-import { HEALTH_POLL_INTERVAL } from '@shared/constants'
+import { DEFAULT_GATEWAY_PORT, HEALTH_POLL_INTERVAL } from '@shared/constants'
 import { useElectron } from '@/hooks/useElectron'
 import { useAppStore } from '@/stores/app-store'
 import { Button } from '@/components/ui/button'
@@ -13,6 +13,7 @@ export function DashboardView() {
   const electron = useElectron()
   const setGatewayConnected = useAppStore((s) => s.setGatewayConnected)
   const gatewayConnected = useAppStore((s) => s.gatewayConnected)
+  const envInfo = useAppStore((s) => s.envInfo)
 
   const [health, setHealth] = useState<HealthSummary | null>(null)
   const [statusSummary, setStatusSummary] = useState<StatusSummary | null>(null)
@@ -79,10 +80,28 @@ export function DashboardView() {
             Monitor your OpenClaw gateway status.
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={fetchHealth}>
-          <RefreshCw className="h-3.5 w-3.5" />
-          Refresh
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={!gatewayConnected}
+            onClick={async () => {
+              const port = envInfo?.gatewayPort ?? DEFAULT_GATEWAY_PORT
+              const token = await electron.getGatewayAuthToken()
+              const url = token
+                ? `http://localhost:${port}/?token=${encodeURIComponent(token)}`
+                : `http://localhost:${port}/`
+              electron.openLink(url)
+            }}
+          >
+            <ExternalLink className="h-3.5 w-3.5" />
+            Console
+          </Button>
+          <Button variant="outline" size="sm" onClick={fetchHealth}>
+            <RefreshCw className="h-3.5 w-3.5" />
+            Refresh
+          </Button>
+        </div>
       </div>
 
       {/* Connection status banner */}

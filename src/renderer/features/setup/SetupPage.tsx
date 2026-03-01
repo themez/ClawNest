@@ -1,9 +1,10 @@
-import { useEffect, useState, useRef, useCallback, useMemo } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { CheckCircle2, XCircle, Loader2, Play, Square, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useElectron } from '@/hooks/useElectron'
+import { useAppStore } from '@/stores/app-store'
 import type { EnvironmentInfo } from '@shared/openclaw-types'
 
 type DetectStatus = 'idle' | 'checking' | 'installed' | 'not-installed'
@@ -12,56 +13,71 @@ interface EnvItem {
   label: string
   status: DetectStatus
   version?: string
+  path?: string
+}
+
+function envToItems(env: EnvironmentInfo | null, checking: boolean): { node: EnvItem; openclaw: EnvItem } {
+  if (!env) {
+    const status = checking ? 'checking' : 'idle'
+    return {
+      node: { label: 'Node.js', status },
+      openclaw: { label: 'OpenClaw', status },
+    }
+  }
+  return {
+    node: {
+      label: 'Node.js',
+      status: env.nodeInstalled ? 'installed' : 'not-installed',
+      version: env.nodeVersion,
+      path: env.nodePath,
+    },
+    openclaw: {
+      label: 'OpenClaw',
+      status: env.openclawInstalled ? 'installed' : 'not-installed',
+      version: env.openclawVersion,
+      path: env.openclawPath,
+    },
+  }
 }
 
 export function SetupPage() {
   const electron = useElectron()
   const navigate = useNavigate()
 
-  const [nodeStatus, setNodeStatus] = useState<EnvItem>({
-    label: 'Node.js',
-    status: 'idle',
-  })
-  const [openclawStatus, setOpenclawStatus] = useState<EnvItem>({
-    label: 'OpenClaw',
-    status: 'idle',
-  })
+  const envInfo = useAppStore((s) => s.envInfo)
+  const envChecking = useAppStore((s) => s.envChecking)
+  const setEnvInfo = useAppStore((s) => s.setEnvInfo)
+  const setEnvChecking = useAppStore((s) => s.setEnvChecking)
 
   const [installOutput, setInstallOutput] = useState<string[]>([])
   const [installVisible, setInstallVisible] = useState(false)
   const [installing, setInstalling] = useState(false)
-  const [daemonRunning, setDaemonRunning] = useState(false)
   const [startingDaemon, setStartingDaemon] = useState(false)
   const [startError, setStartError] = useState<string | null>(null)
   const logRef = useRef<HTMLDivElement>(null)
 
   const detectEnv = useCallback(async () => {
-    setNodeStatus((s) => ({ ...s, status: 'checking' }))
-    setOpenclawStatus((s) => ({ ...s, status: 'checking' }))
-
+    setEnvChecking(true)
     try {
       const env: EnvironmentInfo = await electron.detectEnv()
-
-      setNodeStatus({
-        label: 'Node.js',
-        status: env.nodeInstalled ? 'installed' : 'not-installed',
-        version: env.nodeVersion,
-      })
-      setOpenclawStatus({
-        label: 'OpenClaw',
-        status: env.openclawInstalled ? 'installed' : 'not-installed',
-        version: env.openclawVersion,
-      })
-      setDaemonRunning(env.gatewayRunning)
+      setEnvInfo(env)
     } catch {
-      setNodeStatus((s) => ({ ...s, status: 'not-installed' }))
-      setOpenclawStatus((s) => ({ ...s, status: 'not-installed' }))
+      // keep previous cached state
+    } finally {
+      setEnvChecking(false)
     }
-  }, [electron])
+  }, [electron, setEnvInfo, setEnvChecking])
 
+  // Only detect on first mount if no cached data
   useEffect(() => {
-    detectEnv()
-  }, [detectEnv])
+    if (!envInfo) {
+      detectEnv()
+    } else {
+      // Refresh in background without blocking UI
+      detectEnv()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Auto-scroll install log
   useEffect(() => {
@@ -70,6 +86,10 @@ export function SetupPage() {
     }
   }, [installOutput])
 
+  const { node: nodeStatus, openclaw: openclawStatus } = envToItems(envInfo, envChecking)
+  const daemonRunning = envInfo?.gatewayRunning ?? false
+  const allReady = nodeStatus.status === 'installed' && openclawStatus.status === 'installed'
+
   const handleInstallNode = () => {
     electron.openLink('https://nodejs.org/')
   }
@@ -77,10 +97,8 @@ export function SetupPage() {
   const handleInstallOpenclaw = () => {
     setInstalling(true)
     setInstallVisible(true)
-    // Show immediate feedback — npm produces no output for ~10s during dependency resolution
     setInstallOutput(['$ npm install -g openclaw', 'Resolving dependencies, please wait...\n'])
 
-    // Set up listeners BEFORE triggering install to avoid race conditions
     const unsubOutput = electron.onOpenclawInstallOutput((_e, data) => {
       setInstallOutput((prev) => [...prev, data as string])
     })
@@ -101,7 +119,6 @@ export function SetupPage() {
       unsubExit()
     })
 
-    // Now trigger the install
     electron.installOpenclaw().catch(() => {
       setInstalling(false)
       setInstallOutput((prev) => [...prev, 'Error: Failed to start install process'])
@@ -148,7 +165,7 @@ export function SetupPage() {
     setStartError(null)
     try {
       await electron.startGateway()
-      setDaemonRunning(true)
+      setEnvInfo({ ...envInfo!, gatewayRunning: true })
       navigate({ to: '/dashboard' })
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to start gateway'
@@ -162,16 +179,15 @@ export function SetupPage() {
     setStartingDaemon(true)
     setStartError(null)
     try {
-      await electron.cliExec(['daemon', 'stop'])
-      setDaemonRunning(false)
-    } catch {
-      // Failed to stop
+      await electron.stopGateway()
+      setEnvInfo({ ...envInfo!, gatewayRunning: false })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to stop gateway'
+      setStartError(msg)
     } finally {
       setStartingDaemon(false)
     }
   }
-
-  const allReady = nodeStatus.status === 'installed' && openclawStatus.status === 'installed'
 
   return (
     <div className="flex flex-col gap-6 max-w-2xl mx-auto">
@@ -270,14 +286,14 @@ export function SetupPage() {
               Run OpenClaw
             </Button>
           )}
-          {!allReady && (
+          {!allReady && !daemonRunning && (
             <p className="text-xs text-muted-foreground mt-2 text-center">
               Install Node.js and OpenClaw first to enable this button.
             </p>
           )}
           {startingDaemon && (
             <p className="text-xs text-muted-foreground mt-2 text-center">
-              Starting gateway, this may take up to 20 seconds...
+              {daemonRunning ? 'Stopping...' : 'Starting gateway, this may take up to 20 seconds...'}
             </p>
           )}
           {startError && (
@@ -313,9 +329,16 @@ function StatusRow({
       <div className="flex items-center gap-3">
         <StatusIcon status={item.status} />
         <div>
-          <span className="text-sm font-medium">{item.label}</span>
-          {item.version && (
-            <span className="ml-2 text-xs text-muted-foreground">v{item.version}</span>
+          <div>
+            <span className="text-sm font-medium">{item.label}</span>
+            {item.version && (
+              <span className="ml-2 text-xs text-muted-foreground">v{item.version}</span>
+            )}
+          </div>
+          {item.path && (
+            <p className="text-xs text-muted-foreground font-mono truncate max-w-xs" title={item.path}>
+              {item.path}
+            </p>
           )}
         </div>
       </div>

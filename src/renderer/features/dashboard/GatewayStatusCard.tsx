@@ -1,9 +1,9 @@
-import { Activity, Clock, Hash } from 'lucide-react'
+import { Activity, Clock, Users, Bot } from 'lucide-react'
 import type { StatusSummary } from '@shared/openclaw-types'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { useAppStore } from '@/stores/app-store'
 
-function formatUptime(ms?: number): string {
-  if (!ms) return '—'
+function formatAge(ms: number): string {
   const seconds = Math.floor(ms / 1000)
   const days = Math.floor(seconds / 86400)
   const hours = Math.floor((seconds % 86400) / 3600)
@@ -17,7 +17,11 @@ function formatUptime(ms?: number): string {
 }
 
 export function GatewayStatusCard({ status }: { status: StatusSummary | null }) {
-  const gw = status?.gateway
+  const connected = useAppStore((s) => s.gatewayConnected)
+
+  const sessionCount = status?.sessions?.count ?? 0
+  const model = status?.sessions?.defaults?.model ?? '—'
+  const agents = status?.heartbeat?.agents ?? []
 
   return (
     <Card>
@@ -30,34 +34,33 @@ export function GatewayStatusCard({ status }: { status: StatusSummary | null }) 
           <span className="text-sm">Status</span>
           <span
             className={`ml-auto text-xs font-medium px-2 py-0.5 rounded-full ${
-              gw?.running
+              connected
                 ? 'bg-green-500/10 text-green-500'
                 : 'bg-muted text-muted-foreground'
             }`}
           >
-            {gw?.running ? 'Running' : 'Stopped'}
+            {connected ? 'Running' : 'Stopped'}
           </span>
         </div>
         <div className="flex items-center gap-2">
-          <Clock className="h-4 w-4 text-muted-foreground" />
-          <span className="text-sm">Uptime</span>
-          <span className="ml-auto text-sm text-muted-foreground">
-            {formatUptime(gw?.uptime)}
-          </span>
+          <Users className="h-4 w-4 text-muted-foreground" />
+          <span className="text-sm">Sessions</span>
+          <span className="ml-auto text-sm text-muted-foreground">{sessionCount}</span>
         </div>
         <div className="flex items-center gap-2">
-          <Hash className="h-4 w-4 text-muted-foreground" />
-          <span className="text-sm">Port</span>
-          <span className="ml-auto text-sm text-muted-foreground">
-            {gw?.port ?? '—'}
-          </span>
+          <Bot className="h-4 w-4 text-muted-foreground" />
+          <span className="text-sm">Model</span>
+          <span className="ml-auto text-sm text-muted-foreground">{model}</span>
         </div>
-        {status?.version && (
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground ml-6">Version</span>
-            <span className="ml-auto text-sm text-muted-foreground">{status.version}</span>
+        {agents.map((a) => (
+          <div key={a.agentId} className="flex items-center gap-2">
+            <Clock className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm">Heartbeat ({a.agentId})</span>
+            <span className="ml-auto text-sm text-muted-foreground">
+              {a.enabled ? `every ${a.every}` : 'disabled'}
+            </span>
           </div>
-        )}
+        ))}
       </CardContent>
     </Card>
   )

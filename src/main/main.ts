@@ -288,8 +288,40 @@ function registerIpcHandlers() {
     gatewayClient.disconnect()
   })
 
+  ipcMain.handle(IPC_CHANNELS.GATEWAY_STOP, async () => {
+    // 1. Disconnect WS client
+    gatewayClient.disconnect()
+
+    // 2. Try daemon stop (works if started via daemon)
+    try {
+      await openclawCli.exec(['daemon', 'stop'], 10_000)
+    } catch {
+      // not started via daemon — ignore
+    }
+
+    // 3. Kill child process if we spawned one
+    if (gatewayProcess) {
+      try {
+        gatewayProcess.kill()
+      } catch {
+        // already dead
+      }
+      gatewayProcess = null
+    }
+  })
+
   ipcMain.handle(IPC_CHANNELS.GATEWAY_RPC_CALL, async (_e, method: string, params?: unknown) => {
     return gatewayClient.call(method, params)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.GATEWAY_AUTH_TOKEN, () => {
+    try {
+      const configPath = join(homedir(), '.openclaw', 'openclaw.json')
+      const config = JSON.parse(readFileSync(configPath, 'utf8'))
+      return config.gateway?.auth?.token ?? null
+    } catch {
+      return null
+    }
   })
 }
 
@@ -327,13 +359,7 @@ app.on('window-all-closed', () => {
 })
 
 app.on('will-quit', () => {
-  // Clean up gateway child process if we spawned one
-  if (gatewayProcess) {
-    try {
-      gatewayProcess.kill()
-    } catch {
-      // already dead
-    }
-    gatewayProcess = null
-  }
+  // Disconnect WS but keep gateway process alive so OpenClaw keeps running
+  gatewayClient.disconnect()
+  gatewayProcess = null
 })

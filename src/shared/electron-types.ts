@@ -31,7 +31,9 @@ export interface ElectronIPC {
   // Gateway
   startGateway: () => Promise<void>
   disconnectGateway: () => Promise<void>
+  stopGateway: () => Promise<void>
   gatewayRpcCall: (method: string, params?: unknown) => Promise<unknown>
+  getGatewayAuthToken: () => Promise<string | null>
 
   // Event listeners (return unsubscribe function)
   onSystemThemeChange: (callback: (event: unknown, theme: string) => void) => () => void
