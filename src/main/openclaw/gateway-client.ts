@@ -1,5 +1,8 @@
 import { EventEmitter } from 'node:events'
 import { randomUUID } from 'node:crypto'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { homedir } from 'node:os'
 import WebSocket from 'ws'
 import { BrowserWindow } from 'electron'
 import { DEFAULT_GATEWAY_PORT } from '@shared/constants'
@@ -51,8 +54,8 @@ const MAX_RETRIES = 3
 const BASE_BACKOFF_MS = 1000
 const REQUEST_TIMEOUT_MS = 30_000
 
-const CLIENT_ID = 'clawbox'
-const CLIENT_DISPLAY_NAME = 'ClawBox'
+const PROTOCOL_VERSION = 3
+const CLIENT_ID = 'gateway-client'
 const CLIENT_VERSION = '0.1.0'
 
 // ---------------------------------------------------------------------------
@@ -64,21 +67,25 @@ export class GatewayClient extends EventEmitter {
   private pending = new Map<string, PendingRequest>()
   private retries = 0
   private shouldReconnect = true
+  private authenticated = false
   private win: BrowserWindow | null = null
   private port = DEFAULT_GATEWAY_PORT
+  private onAuthComplete: (() => void) | null = null
+  private onAuthFailed: ((err: Error) => void) | null = null
 
   setWindow(win: BrowserWindow) {
     this.win = win
   }
 
   isConnected(): boolean {
-    return this.ws?.readyState === WebSocket.OPEN
+    return this.ws?.readyState === WebSocket.OPEN && this.authenticated
   }
 
   async connect(port?: number): Promise<void> {
     if (port) this.port = port
     this.shouldReconnect = true
     this.retries = 0
+    this.authenticated = false
     return this.doConnect()
   }
 
@@ -87,10 +94,27 @@ export class GatewayClient extends EventEmitter {
       const url = `ws://127.0.0.1:${this.port}`
       const ws = new WebSocket(url)
 
+      // Auth completion callbacks — connect() waits for auth, not just WS open
+      this.onAuthComplete = () => resolve()
+      this.onAuthFailed = (err) => reject(err)
+
+      const authTimeout = setTimeout(() => {
+        this.onAuthComplete = null
+        this.onAuthFailed = null
+        reject(new Error('Gateway auth handshake timed out'))
+        ws.close()
+      }, REQUEST_TIMEOUT_MS)
+
+      const cleanupAuth = () => {
+        clearTimeout(authTimeout)
+        this.onAuthComplete = null
+        this.onAuthFailed = null
+      }
+
       ws.on('open', () => {
         this.ws = ws
         this.retries = 0
-        resolve()
+        // Don't resolve yet — wait for auth handshake
       })
 
       ws.on('message', (raw: WebSocket.RawData) => {
@@ -104,6 +128,8 @@ export class GatewayClient extends EventEmitter {
 
       ws.on('close', () => {
         this.ws = null
+        this.authenticated = false
+        cleanupAuth()
         this.sendToRenderer(IPC_EVENTS.GATEWAY_DISCONNECTED)
         this.emit('disconnected')
         this.maybeReconnect()
@@ -111,6 +137,7 @@ export class GatewayClient extends EventEmitter {
 
       ws.on('error', (err) => {
         if (!this.ws) {
+          cleanupAuth()
           reject(err)
         }
       })
@@ -131,7 +158,7 @@ export class GatewayClient extends EventEmitter {
   }
 
   async call(method: string, params?: unknown): Promise<unknown> {
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN || !this.authenticated) {
       throw new Error('Gateway not connected')
     }
 
@@ -179,31 +206,54 @@ export class GatewayClient extends EventEmitter {
     }
   }
 
+  private readAuthToken(): string | undefined {
+    try {
+      const configPath = join(homedir(), '.openclaw', 'openclaw.json')
+      const config = JSON.parse(readFileSync(configPath, 'utf8'))
+      return config.gateway?.auth?.token
+    } catch {
+      return undefined
+    }
+  }
+
   private handleEvent(frame: EventFrame) {
     if (frame.event === 'connect.challenge') {
-      // Respond to authentication challenge
       const id = randomUUID()
+      const token = this.readAuthToken()
       const authFrame: RequestFrame = {
         type: 'req',
         id,
         method: 'connect',
         params: {
-          clientId: CLIENT_ID,
-          displayName: CLIENT_DISPLAY_NAME,
-          version: CLIENT_VERSION,
-          nonce: (frame.payload as { nonce?: string })?.nonce,
+          minProtocol: PROTOCOL_VERSION,
+          maxProtocol: PROTOCOL_VERSION,
+          client: {
+            id: CLIENT_ID,
+            version: CLIENT_VERSION,
+            platform: process.platform,
+            mode: 'backend',
+          },
+          caps: [],
+          role: 'operator',
+          scopes: ['operator.admin'],
+          auth: token ? { token } : undefined,
         },
       }
       this.ws?.send(JSON.stringify(authFrame))
 
-      // Wait for response to mark as connected
       this.pending.set(id, {
         resolve: () => {
+          this.authenticated = true
           this.sendToRenderer(IPC_EVENTS.GATEWAY_CONNECTED)
           this.emit('connected')
+          this.onAuthComplete?.()
+          this.onAuthComplete = null
+          this.onAuthFailed = null
         },
-        reject: () => {
-          // Auth failed
+        reject: (err) => {
+          this.onAuthFailed?.(err)
+          this.onAuthComplete = null
+          this.onAuthFailed = null
         },
       })
     } else if (frame.event === 'health') {
