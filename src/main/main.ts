@@ -1,7 +1,9 @@
 import { app, BrowserWindow, ipcMain, nativeTheme, shell } from 'electron'
 import { join } from 'node:path'
-import { spawn } from 'node:child_process'
+import { spawn, type ChildProcess } from 'node:child_process'
 import { createConnection } from 'node:net'
+import { readFileSync, writeFileSync, existsSync } from 'node:fs'
+import { homedir } from 'node:os'
 import { DEFAULT_GATEWAY_PORT } from '@shared/constants'
 import { IPC_CHANNELS, IPC_EVENTS } from '@shared/ipc-types'
 import { detectAll } from './openclaw/environment'
@@ -13,6 +15,7 @@ import { getWindowState, saveWindowState } from './window-state'
 
 let mainWindow: BrowserWindow | null = null
 let gatewayConnectInFlight: Promise<void> | null = null
+let gatewayProcess: ChildProcess | null = null
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -30,6 +33,55 @@ function probeGateway(port: number): Promise<boolean> {
       resolve(false)
     })
   })
+}
+
+/** Poll gateway port until reachable or timeout. */
+async function waitForGateway(port: number, maxWaitMs = 20_000): Promise<boolean> {
+  const start = Date.now()
+  while (Date.now() - start < maxWaitMs) {
+    if (await probeGateway(port)) return true
+    await new Promise((r) => setTimeout(r, 1000))
+  }
+  return false
+}
+
+/** Ensure gateway.mode is set in openclaw config so gateway can start. */
+function ensureGatewayMode(): void {
+  const configPath = join(homedir(), '.openclaw', 'openclaw.json')
+  if (!existsSync(configPath)) return
+
+  try {
+    const config = JSON.parse(readFileSync(configPath, 'utf8'))
+    if (!config.gateway?.mode) {
+      config.gateway = config.gateway || {}
+      config.gateway.mode = 'local'
+      writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n')
+    }
+  } catch {
+    // Config not parseable — skip
+  }
+}
+
+/** Start gateway as a foreground child process. */
+function startGatewayProcess(port: number): void {
+  if (gatewayProcess) return // already running
+
+  const child = spawn('openclaw', ['gateway', '--port', String(port)], {
+    stdio: ['ignore', 'pipe', 'pipe'],
+    detached: true,
+  })
+
+  child.on('exit', (code) => {
+    console.log(`[clawbox] gateway process exited (code ${code})`)
+    if (gatewayProcess === child) gatewayProcess = null
+  })
+  child.on('error', () => {
+    if (gatewayProcess === child) gatewayProcess = null
+  })
+
+  // Prevent parent from waiting on detached child
+  child.unref()
+  gatewayProcess = child
 }
 
 // ---------------------------------------------------------------------------
@@ -189,17 +241,37 @@ function registerIpcHandlers() {
 
     gatewayConnectInFlight = (async () => {
       try {
-        // First check if gateway is reachable
-        const reachable = await probeGateway(DEFAULT_GATEWAY_PORT)
+        // 1. Check if gateway is already reachable
+        if (await probeGateway(DEFAULT_GATEWAY_PORT)) {
+          await gatewayClient.connect(DEFAULT_GATEWAY_PORT)
+          return
+        }
 
-        if (!reachable) {
-          // Try to start the daemon
-          try {
-            await openclawCli.exec(['daemon', 'start'], 15_000)
-            // Wait a bit for the gateway to start
-            await new Promise((r) => setTimeout(r, 2000))
-          } catch {
-            // daemon start may fail if already running or not installed
+        // 2. Ensure gateway.mode is set (required by OpenClaw)
+        ensureGatewayMode()
+
+        // 3. Try daemon start first (preferred — survives app exit)
+        try {
+          const result = await openclawCli.exec(['daemon', 'start'], 10_000)
+          if (result.exitCode === 0) {
+            // daemon start succeeded, wait for gateway to bind
+            if (await waitForGateway(DEFAULT_GATEWAY_PORT, 20_000)) {
+              await gatewayClient.connect(DEFAULT_GATEWAY_PORT)
+              return
+            }
+          }
+        } catch {
+          // daemon start failed — fall through to direct start
+        }
+
+        // 4. Fallback: start gateway as a child process
+        if (!await probeGateway(DEFAULT_GATEWAY_PORT)) {
+          startGatewayProcess(DEFAULT_GATEWAY_PORT)
+
+          if (!await waitForGateway(DEFAULT_GATEWAY_PORT, 20_000)) {
+            throw new Error(
+              'Gateway did not start within 20s. Check ~/.openclaw/logs/gateway.err.log',
+            )
           }
         }
 
@@ -251,5 +323,17 @@ app.whenReady().then(() => {
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit()
+  }
+})
+
+app.on('will-quit', () => {
+  // Clean up gateway child process if we spawned one
+  if (gatewayProcess) {
+    try {
+      gatewayProcess.kill()
+    } catch {
+      // already dead
+    }
+    gatewayProcess = null
   }
 })

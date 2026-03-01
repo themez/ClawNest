@@ -32,6 +32,7 @@ export function SetupPage() {
   const [installing, setInstalling] = useState(false)
   const [daemonRunning, setDaemonRunning] = useState(false)
   const [startingDaemon, setStartingDaemon] = useState(false)
+  const [startError, setStartError] = useState<string | null>(null)
   const logRef = useRef<HTMLDivElement>(null)
 
   const detectEnv = useCallback(async () => {
@@ -144,13 +145,14 @@ export function SetupPage() {
 
   const handleStartDaemon = async () => {
     setStartingDaemon(true)
+    setStartError(null)
     try {
       await electron.startGateway()
       setDaemonRunning(true)
-      // Navigate to dashboard after successful start
       navigate({ to: '/dashboard' })
-    } catch {
-      // Failed to start
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to start gateway'
+      setStartError(msg)
     } finally {
       setStartingDaemon(false)
     }
@@ -158,6 +160,7 @@ export function SetupPage() {
 
   const handleStopDaemon = async () => {
     setStartingDaemon(true)
+    setStartError(null)
     try {
       await electron.cliExec(['daemon', 'stop'])
       setDaemonRunning(false)
@@ -270,6 +273,16 @@ export function SetupPage() {
           {!allReady && (
             <p className="text-xs text-muted-foreground mt-2 text-center">
               Install Node.js and OpenClaw first to enable this button.
+            </p>
+          )}
+          {startingDaemon && (
+            <p className="text-xs text-muted-foreground mt-2 text-center">
+              Starting gateway, this may take up to 20 seconds...
+            </p>
+          )}
+          {startError && (
+            <p className="text-xs text-destructive mt-2 text-center">
+              {startError}
             </p>
           )}
         </CardContent>
