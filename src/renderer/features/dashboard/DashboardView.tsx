@@ -38,10 +38,11 @@ export function DashboardView() {
   }, [electron, setGatewayConnected])
 
   useEffect(() => {
-    fetchHealth()
+    // Auto-connect if gateway is already running but client not connected
+    electron.startGateway().then(fetchHealth, fetchHealth)
     const interval = setInterval(fetchHealth, HEALTH_POLL_INTERVAL)
     return () => clearInterval(interval)
-  }, [fetchHealth])
+  }, [electron, fetchHealth])
 
   // Listen for push events
   useEffect(() => {
