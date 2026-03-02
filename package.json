@@ -17,6 +17,7 @@
     "package:all": "electron-vite build && electron-builder --mac --win"
   },
   "dependencies": {
+    "@mariozechner/pi-ai": "^0.55.3",
     "@tanstack/react-router": "^1.163.2",
     "electron-store": "^11.0.2",
     "react": "^18.3.1",
@@ -26,8 +27,8 @@
   },
   "devDependencies": {
     "@radix-ui/react-slot": "^1.1.2",
-    "@tanstack/router-plugin": "^1.163.2",
     "@tailwindcss/vite": "^4.1.0",
+    "@tanstack/router-plugin": "^1.163.2",
     "@types/node": "^20.17.0",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",

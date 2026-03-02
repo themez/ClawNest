@@ -1,6 +1,6 @@
 import { app, BrowserWindow, ipcMain, nativeTheme, shell } from 'electron'
 import { join } from 'node:path'
-import { spawn, type ChildProcess } from 'node:child_process'
+import { spawn } from 'node:child_process'
 import { createConnection } from 'node:net'
 import { readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { homedir } from 'node:os'
@@ -12,10 +12,11 @@ import { gatewayClient } from './openclaw/gateway-client'
 import { store } from './store'
 import type { StoreSchema } from './store'
 import { getWindowState, saveWindowState } from './window-state'
+import { performOAuthLogin, isOAuthSupported, getOAuthProviderIds } from './openclaw/openai-codex-oauth'
+import { upsertAuthProfile, applyAuthProfileToConfig, deleteAuthForProvider, saveProviderApiKey, getProviderEndpoints } from './openclaw/auth-store'
 
 let mainWindow: BrowserWindow | null = null
 let gatewayConnectInFlight: Promise<void> | null = null
-let gatewayProcess: ChildProcess | null = null
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -62,26 +63,16 @@ function ensureGatewayMode(): void {
   }
 }
 
-/** Start gateway as a foreground child process. */
-function startGatewayProcess(port: number): void {
-  if (gatewayProcess) return // already running
-
-  const child = spawn('openclaw', ['gateway', '--port', String(port)], {
-    stdio: ['ignore', 'pipe', 'pipe'],
-    detached: true,
-  })
-
-  child.on('exit', (code) => {
-    console.log(`[clawbox] gateway process exited (code ${code})`)
-    if (gatewayProcess === child) gatewayProcess = null
-  })
-  child.on('error', () => {
-    if (gatewayProcess === child) gatewayProcess = null
-  })
-
-  // Prevent parent from waiting on detached child
-  child.unref()
-  gatewayProcess = child
+/** Ensure gateway is installed as a system service (launchd/systemd/schtasks). */
+async function ensureGatewayInstalled(): Promise<void> {
+  try {
+    const result = await openclawCli.exec(['gateway', 'install'], 15_000)
+    if (result.exitCode !== 0 && !result.stderr.includes('already installed')) {
+      console.log(`[clawbox] gateway install: ${result.stderr}`)
+    }
+  } catch (err) {
+    console.log(`[clawbox] gateway install failed: ${err}`)
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -202,7 +193,12 @@ function registerIpcHandlers() {
     child.on('close', (code) => sendExit(code ?? 1))
   })
 
-  ipcMain.handle(IPC_CHANNELS.OPENCLAW_UNINSTALL, (event) => {
+  ipcMain.handle(IPC_CHANNELS.OPENCLAW_UNINSTALL, async (event) => {
+    // Stop and uninstall gateway service before removing openclaw
+    gatewayClient.disconnect()
+    try { await openclawCli.exec(['gateway', 'stop'], 10_000) } catch { /* ignore */ }
+    try { await openclawCli.exec(['gateway', 'uninstall'], 10_000) } catch { /* ignore */ }
+
     const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm'
     const child = spawn(npmCmd, ['uninstall', '-g', 'openclaw'], {
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -235,47 +231,238 @@ function registerIpcHandlers() {
     return openclawCli.exec(args)
   })
 
-  // ─── Gateway ──────────────────────────────────────────────────────────
+  ipcMain.handle(IPC_CHANNELS.OPENCLAW_MODELS_STATUS, async () => {
+    try {
+      const result = await openclawCli.exec(['models', 'status', '--json'])
+      if (result.exitCode !== 0) {
+        return { defaultModel: null, missingProvidersInUse: [], providersWithOAuth: [], providers: [] }
+      }
+      const data = JSON.parse(result.stdout)
+      const auth = data?.auth ?? {}
+      const oauthProviders = auth.oauth?.providers ?? []
+      const providers = oauthProviders.map(
+        (p: { provider?: string; status?: string; profiles?: unknown[] }) => ({
+          provider: p.provider ?? 'unknown',
+          status: p.status === 'ok' ? 'ok' : p.status === 'expired' ? 'expired' : 'missing',
+          profiles: p.profiles ?? [],
+        }),
+      )
+      // Use the known OAuth-capable providers from pi-ai library
+      const providersWithOAuth = getOAuthProviderIds()
+
+      return {
+        defaultModel: data?.defaultModel ?? null,
+        missingProvidersInUse: auth.missingProvidersInUse ?? [],
+        providersWithOAuth,
+        providers,
+      }
+    } catch {
+      return { defaultModel: null, missingProvidersInUse: [], providersWithOAuth: [], providers: [] }
+    }
+  })
+
+  ipcMain.handle(
+    IPC_CHANNELS.OPENCLAW_MODELS_AUTH_SAVE_TOKEN,
+    async (_e, provider: string, token: string, endpoint?: string) => {
+      try {
+        saveProviderApiKey(provider, token, endpoint)
+        return { success: true }
+      } catch (err) {
+        return { success: false, error: err instanceof Error ? err.message : 'Unknown error' }
+      }
+    },
+  )
+
+  ipcMain.handle(IPC_CHANNELS.OPENCLAW_PROVIDER_ENDPOINTS, (_e, provider: string) => {
+    return getProviderEndpoints(provider)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.OPENCLAW_MODELS_AUTH_DELETE, async (_e, provider: string) => {
+    try {
+      deleteAuthForProvider(provider)
+      return { success: true }
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : 'Failed to delete' }
+    }
+  })
+
+  // ─── OAuth Login ──────────────────────────────────────────────────────
+  // Prompt reply mechanism: main asks renderer for user input, renderer replies here
+  let pendingPromptResolve: ((value: string) => void) | null = null
+  let oauthAbortController: AbortController | null = null
+
+  ipcMain.handle(IPC_CHANNELS.OPENCLAW_AUTH_PROMPT_REPLY, (_e, value: string) => {
+    if (pendingPromptResolve) {
+      pendingPromptResolve(value)
+      pendingPromptResolve = null
+    }
+  })
+
+  ipcMain.handle(IPC_CHANNELS.OPENCLAW_AUTH_OAUTH_CANCEL, () => {
+    if (oauthAbortController) {
+      oauthAbortController.abort()
+      oauthAbortController = null
+    }
+    // Also resolve any pending prompt so the flow unblocks
+    if (pendingPromptResolve) {
+      pendingPromptResolve('')
+      pendingPromptResolve = null
+    }
+  })
+
+  ipcMain.handle(IPC_CHANNELS.OPENCLAW_AUTH_OAUTH_LOGIN, async (event, provider: string) => {
+    const sendOutput = (msg: string) => {
+      if (!event.sender.isDestroyed()) {
+        event.sender.send(IPC_EVENTS.OPENCLAW_AUTH_LOGIN_OUTPUT, msg)
+      }
+    }
+    const sendExit = (code: number) => {
+      if (!event.sender.isDestroyed()) {
+        event.sender.send(IPC_EVENTS.OPENCLAW_AUTH_LOGIN_EXIT, code)
+      }
+    }
+
+    oauthAbortController = new AbortController()
+    const { signal } = oauthAbortController
+
+    try {
+      if (!isOAuthSupported(provider)) {
+        sendOutput(`OAuth login is not supported for provider: ${provider}\n`)
+        sendExit(1)
+        return
+      }
+
+      const result = await performOAuthLogin(provider, {
+        openUrl: (url) => shell.openExternal(url),
+        onProgress: sendOutput,
+        onPrompt: (message: string, placeholder?: string) => {
+          return new Promise<string>((resolve, reject) => {
+            pendingPromptResolve = resolve
+            signal.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')), { once: true })
+            if (!event.sender.isDestroyed()) {
+              event.sender.send(IPC_EVENTS.OPENCLAW_AUTH_LOGIN_PROMPT, message, placeholder)
+            }
+          })
+        },
+        signal,
+      })
+
+      if (!result) {
+        sendExit(1)
+        return
+      }
+
+      // Write credentials to auth-profiles.json
+      const profileId = `${provider}:${result.email}`
+      upsertAuthProfile(profileId, {
+        type: 'oauth',
+        provider,
+        access: result.access,
+        refresh: result.refresh,
+        expires: result.expires,
+        email: result.email,
+      })
+
+      // Update openclaw.json to reference the profile
+      applyAuthProfileToConfig(profileId, provider, 'oauth')
+
+      sendOutput('OAuth login successful!\n')
+      sendExit(0)
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        sendOutput('OAuth login cancelled.\n')
+        sendExit(1)
+      } else {
+        sendOutput(`OAuth error: ${err instanceof Error ? err.message : String(err)}\n`)
+        sendExit(1)
+      }
+    } finally {
+      oauthAbortController = null
+    }
+  })
+
+  ipcMain.handle(IPC_CHANNELS.OPENCLAW_MODELS_LIST, async () => {
+    try {
+      const result = await openclawCli.exec(['models', 'list', '--all', '--json'])
+      if (result.exitCode !== 0) return []
+      const data = JSON.parse(result.stdout)
+      const models = data.models ?? data
+      if (!Array.isArray(models)) return []
+      return models.map((m: { key?: string; name?: string; available?: boolean }) => ({
+        key: m.key ?? '',
+        name: m.name ?? '',
+        available: m.available ?? false,
+      }))
+    } catch {
+      return []
+    }
+  })
+
+  ipcMain.handle(IPC_CHANNELS.OPENCLAW_SET_DEFAULT_MODEL, async (_e, model: string) => {
+    try {
+      const result = await openclawCli.exec(['models', 'set', model])
+      if (result.exitCode === 0) {
+        return { success: true }
+      }
+      return { success: false, error: result.stderr || `Exit code ${result.exitCode}` }
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : 'Unknown error' }
+    }
+  })
+
+  ipcMain.handle(IPC_CHANNELS.OPENCLAW_PLUGINS_ENABLE, async (_e, pluginId: string) => {
+    try {
+      const result = await openclawCli.exec(['plugins', 'enable', pluginId])
+      if (result.exitCode === 0) {
+        return { success: true }
+      }
+      return { success: false, error: result.stderr || `Exit code ${result.exitCode}` }
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : 'Unknown error' }
+    }
+  })
+
+  // ─── Gateway (managed via `openclaw gateway install/start/stop/restart`) ─
   ipcMain.handle(IPC_CHANNELS.GATEWAY_CONNECT, async () => {
     if (gatewayConnectInFlight) return gatewayConnectInFlight
 
     gatewayConnectInFlight = (async () => {
       try {
-        // 1. Check if gateway is already reachable
-        if (await probeGateway(DEFAULT_GATEWAY_PORT)) {
+        // 1. If already reachable, just connect the WS client
+        const reachable = await probeGateway(DEFAULT_GATEWAY_PORT)
+        console.log(`[clawbox] gateway probe port=${DEFAULT_GATEWAY_PORT} reachable=${reachable}`)
+
+        if (reachable) {
+          console.log('[clawbox] gateway already running, connecting WS client…')
           await gatewayClient.connect(DEFAULT_GATEWAY_PORT)
+          console.log('[clawbox] gateway WS connected')
           return
         }
 
-        // 2. Ensure gateway.mode is set (required by OpenClaw)
+        // 2. Ensure config prerequisites
         ensureGatewayMode()
 
-        // 3. Try daemon start first (preferred — survives app exit)
-        try {
-          const result = await openclawCli.exec(['daemon', 'start'], 10_000)
-          if (result.exitCode === 0) {
-            // daemon start succeeded, wait for gateway to bind
-            if (await waitForGateway(DEFAULT_GATEWAY_PORT, 20_000)) {
-              await gatewayClient.connect(DEFAULT_GATEWAY_PORT)
-              return
-            }
-          }
-        } catch {
-          // daemon start failed — fall through to direct start
+        // 3. Ensure gateway is installed as a system service
+        console.log('[clawbox] installing gateway service…')
+        await ensureGatewayInstalled()
+
+        // 4. Start via service manager (launchd/systemd/schtasks)
+        console.log('[clawbox] starting gateway service…')
+        const startResult = await openclawCli.exec(['gateway', 'start'], 15_000)
+        console.log(`[clawbox] gateway start exit=${startResult.exitCode} stdout=${startResult.stdout.slice(0, 200)} stderr=${startResult.stderr.slice(0, 200)}`)
+
+        if (!await waitForGateway(DEFAULT_GATEWAY_PORT, 20_000)) {
+          throw new Error(
+            'Gateway did not start within 20s. Check ~/.openclaw/logs/gateway.err.log',
+          )
         }
 
-        // 4. Fallback: start gateway as a child process
-        if (!await probeGateway(DEFAULT_GATEWAY_PORT)) {
-          startGatewayProcess(DEFAULT_GATEWAY_PORT)
-
-          if (!await waitForGateway(DEFAULT_GATEWAY_PORT, 20_000)) {
-            throw new Error(
-              'Gateway did not start within 20s. Check ~/.openclaw/logs/gateway.err.log',
-            )
-          }
-        }
-
+        console.log('[clawbox] gateway port reachable, connecting WS…')
         await gatewayClient.connect(DEFAULT_GATEWAY_PORT)
+        console.log('[clawbox] gateway WS connected')
+      } catch (err) {
+        console.error('[clawbox] GATEWAY_CONNECT error:', err)
+        throw err
       } finally {
         gatewayConnectInFlight = null
       }
@@ -289,25 +476,22 @@ function registerIpcHandlers() {
   })
 
   ipcMain.handle(IPC_CHANNELS.GATEWAY_STOP, async () => {
-    // 1. Disconnect WS client
     gatewayClient.disconnect()
+    await openclawCli.exec(['gateway', 'stop'], 15_000)
+  })
 
-    // 2. Try daemon stop (works if started via daemon)
-    try {
-      await openclawCli.exec(['daemon', 'stop'], 10_000)
-    } catch {
-      // not started via daemon — ignore
+  ipcMain.handle(IPC_CHANNELS.GATEWAY_RESTART, async () => {
+    gatewayClient.disconnect()
+    await openclawCli.exec(['gateway', 'restart'], 15_000)
+
+    // Give the gateway process time to shut down before probing
+    await new Promise((r) => setTimeout(r, 3000))
+
+    if (!await waitForGateway(DEFAULT_GATEWAY_PORT, 30_000)) {
+      throw new Error('Gateway did not restart within 30s')
     }
 
-    // 3. Kill child process if we spawned one
-    if (gatewayProcess) {
-      try {
-        gatewayProcess.kill()
-      } catch {
-        // already dead
-      }
-      gatewayProcess = null
-    }
+    await gatewayClient.connect(DEFAULT_GATEWAY_PORT)
   })
 
   ipcMain.handle(IPC_CHANNELS.GATEWAY_RPC_CALL, async (_e, method: string, params?: unknown) => {
@@ -359,7 +543,6 @@ app.on('window-all-closed', () => {
 })
 
 app.on('will-quit', () => {
-  // Disconnect WS but keep gateway process alive so OpenClaw keeps running
+  // Disconnect WS client — gateway service keeps running independently
   gatewayClient.disconnect()
-  gatewayProcess = null
 })

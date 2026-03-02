@@ -19,10 +19,21 @@ export const IPC_CHANNELS = {
   OPENCLAW_INSTALL: 'openclaw:install',
   OPENCLAW_UNINSTALL: 'openclaw:uninstall',
   OPENCLAW_CLI_EXEC: 'openclaw:cli-exec',
+  OPENCLAW_MODELS_STATUS: 'openclaw:models-status',
+  OPENCLAW_MODELS_AUTH_SAVE_TOKEN: 'openclaw:models-auth-save-token',
+  OPENCLAW_AUTH_OAUTH_LOGIN: 'openclaw:auth-oauth-login',
+  OPENCLAW_MODELS_LIST: 'openclaw:models-list',
+  OPENCLAW_SET_DEFAULT_MODEL: 'openclaw:set-default-model',
+  OPENCLAW_PLUGINS_ENABLE: 'openclaw:plugins-enable',
+  OPENCLAW_MODELS_AUTH_DELETE: 'openclaw:models-auth-delete',
+  OPENCLAW_AUTH_OAUTH_CANCEL: 'openclaw:auth-oauth-cancel',
+  OPENCLAW_AUTH_PROMPT_REPLY: 'openclaw:auth-prompt-reply',
+  OPENCLAW_PROVIDER_ENDPOINTS: 'openclaw:provider-endpoints',
   // Gateway
   GATEWAY_CONNECT: 'gateway:connect',
   GATEWAY_DISCONNECT: 'gateway:disconnect',
   GATEWAY_STOP: 'gateway:stop',
+  GATEWAY_RESTART: 'gateway:restart',
   GATEWAY_RPC_CALL: 'gateway:rpc-call',
   GATEWAY_AUTH_TOKEN: 'gateway:auth-token',
 } as const
@@ -38,6 +49,9 @@ export const IPC_EVENTS = {
   GATEWAY_HEALTH_UPDATE: 'gateway:health-update',
   OPENCLAW_INSTALL_OUTPUT: 'openclaw:install-output',
   OPENCLAW_INSTALL_EXIT: 'openclaw:install-exit',
+  OPENCLAW_AUTH_LOGIN_OUTPUT: 'openclaw:auth-login-output',
+  OPENCLAW_AUTH_LOGIN_EXIT: 'openclaw:auth-login-exit',
+  OPENCLAW_AUTH_LOGIN_PROMPT: 'openclaw:auth-login-prompt',
 } as const
 
 export type IpcEvent = (typeof IPC_EVENTS)[keyof typeof IPC_EVENTS]

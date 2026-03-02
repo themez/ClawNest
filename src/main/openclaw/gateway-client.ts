@@ -83,6 +83,13 @@ export class GatewayClient extends EventEmitter {
 
   async connect(port?: number): Promise<void> {
     if (port) this.port = port
+    // Close any existing connection first
+    if (this.ws) {
+      console.log('[gateway-client] closing existing WS before reconnect')
+      this.shouldReconnect = false
+      this.ws.close()
+      this.ws = null
+    }
     this.shouldReconnect = true
     this.retries = 0
     this.authenticated = false
@@ -112,6 +119,7 @@ export class GatewayClient extends EventEmitter {
       }
 
       ws.on('open', () => {
+        console.log('[gateway-client] WS open, waiting for auth handshake…')
         this.ws = ws
         this.retries = 0
         // Don't resolve yet — wait for auth handshake
@@ -120,13 +128,15 @@ export class GatewayClient extends EventEmitter {
       ws.on('message', (raw: WebSocket.RawData) => {
         try {
           const frame = JSON.parse(raw.toString()) as GatewayFrame
+          console.log(`[gateway-client] frame: type=${frame.type} ${frame.type === 'event' ? 'event=' + frame.event : ''} ${frame.type === 'res' ? 'ok=' + frame.ok : ''}`)
           this.handleFrame(frame)
         } catch {
           // ignore malformed frames
         }
       })
 
-      ws.on('close', () => {
+      ws.on('close', (code, reason) => {
+        console.log(`[gateway-client] WS closed code=${code} reason=${reason?.toString()}`)
         this.ws = null
         this.authenticated = false
         cleanupAuth()
@@ -136,6 +146,7 @@ export class GatewayClient extends EventEmitter {
       })
 
       ws.on('error', (err) => {
+        console.log(`[gateway-client] WS error: ${err.message}`)
         if (!this.ws) {
           cleanupAuth()
           reject(err)

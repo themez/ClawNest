@@ -86,6 +86,27 @@ export interface StatusSummary {
   }
 }
 
+export interface AuthProfile {
+  profileId: string
+  provider: string
+  type: 'token' | 'oauth' | 'apiKey'
+  status: string
+  label: string
+}
+
+export interface AuthProviderStatus {
+  provider: string
+  status: 'ok' | 'missing' | 'expired'
+  profiles: AuthProfile[]
+}
+
+export interface ModelsAuthStatus {
+  defaultModel: string | null
+  missingProvidersInUse: string[]
+  providersWithOAuth: string[]
+  providers: AuthProviderStatus[]
+}
+
 export interface EnvironmentInfo {
   nodeInstalled: boolean
   nodeVersion?: string

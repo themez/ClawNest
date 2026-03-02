@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useElectron } from '@/hooks/useElectron'
 import { useAppStore } from '@/stores/app-store'
 import type { EnvironmentInfo } from '@shared/openclaw-types'
+import { ApiAuthSection } from './ApiAuthSection'
 
 type DetectStatus = 'idle' | 'checking' | 'installed' | 'not-installed'
 
@@ -180,7 +181,12 @@ export function SetupPage() {
     setStartError(null)
     try {
       await electron.stopGateway()
-      setEnvInfo({ ...envInfo!, gatewayRunning: false })
+      // Re-detect to verify it actually stopped
+      const env = await electron.detectEnv()
+      setEnvInfo(env)
+      if (env.gatewayRunning) {
+        setStartError('Gateway is still running. It may have been started outside ClawBox.')
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to stop gateway'
       setStartError(msg)
@@ -249,6 +255,9 @@ export function SetupPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* API Authentication */}
+      {openclawStatus.status === 'installed' && <ApiAuthSection />}
 
       {/* Run Control */}
       <Card>

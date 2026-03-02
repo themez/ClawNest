@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { EnvironmentInfo } from '@shared/openclaw-types'
+import type { EnvironmentInfo, ModelsAuthStatus } from '@shared/openclaw-types'
 
 interface AppStore {
   theme: 'light' | 'dark' | 'system'
@@ -12,6 +12,10 @@ interface AppStore {
   envChecking: boolean
   setEnvInfo: (info: EnvironmentInfo) => void
   setEnvChecking: (checking: boolean) => void
+
+  // Cached auth status
+  authStatus: ModelsAuthStatus | null
+  setAuthStatus: (status: ModelsAuthStatus) => void
 
   setTheme: (theme: 'light' | 'dark' | 'system') => void
   setLanguage: (lang: string) => void
@@ -29,6 +33,9 @@ export const useAppStore = create<AppStore>((set) => ({
   envChecking: false,
   setEnvInfo: (envInfo) => set({ envInfo }),
   setEnvChecking: (envChecking) => set({ envChecking }),
+
+  authStatus: null,
+  setAuthStatus: (authStatus) => set({ authStatus }),
 
   setTheme: (theme) => set({ theme }),
   setLanguage: (language) => set({ language }),

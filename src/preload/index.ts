@@ -25,11 +25,27 @@ contextBridge.exposeInMainWorld('electronAPI', {
   installOpenclaw: () => ipcRenderer.invoke(IPC_CHANNELS.OPENCLAW_INSTALL),
   uninstallOpenclaw: () => ipcRenderer.invoke(IPC_CHANNELS.OPENCLAW_UNINSTALL),
   cliExec: (args: string[]) => ipcRenderer.invoke(IPC_CHANNELS.OPENCLAW_CLI_EXEC, args),
+  getModelsAuthStatus: () => ipcRenderer.invoke(IPC_CHANNELS.OPENCLAW_MODELS_STATUS),
+  saveModelAuthToken: (provider: string, token: string, endpoint?: string) =>
+    ipcRenderer.invoke(IPC_CHANNELS.OPENCLAW_MODELS_AUTH_SAVE_TOKEN, provider, token, endpoint),
+  getProviderEndpoints: (provider: string) =>
+    ipcRenderer.invoke(IPC_CHANNELS.OPENCLAW_PROVIDER_ENDPOINTS, provider),
+  deleteModelAuth: (provider: string) =>
+    ipcRenderer.invoke(IPC_CHANNELS.OPENCLAW_MODELS_AUTH_DELETE, provider),
+  startOAuthLogin: (provider: string) =>
+    ipcRenderer.invoke(IPC_CHANNELS.OPENCLAW_AUTH_OAUTH_LOGIN, provider),
+  cancelOAuthLogin: () => ipcRenderer.invoke(IPC_CHANNELS.OPENCLAW_AUTH_OAUTH_CANCEL),
+  listModels: () => ipcRenderer.invoke(IPC_CHANNELS.OPENCLAW_MODELS_LIST),
+  setDefaultModel: (model: string) =>
+    ipcRenderer.invoke(IPC_CHANNELS.OPENCLAW_SET_DEFAULT_MODEL, model),
+  enablePlugin: (pluginId: string) =>
+    ipcRenderer.invoke(IPC_CHANNELS.OPENCLAW_PLUGINS_ENABLE, pluginId),
 
   // ─── Gateway ─────────────────────────────────────────────────────────────
   startGateway: () => ipcRenderer.invoke(IPC_CHANNELS.GATEWAY_CONNECT),
   disconnectGateway: () => ipcRenderer.invoke(IPC_CHANNELS.GATEWAY_DISCONNECT),
   stopGateway: () => ipcRenderer.invoke(IPC_CHANNELS.GATEWAY_STOP),
+  restartGateway: () => ipcRenderer.invoke(IPC_CHANNELS.GATEWAY_RESTART),
   gatewayRpcCall: (method: string, params?: unknown) =>
     ipcRenderer.invoke(IPC_CHANNELS.GATEWAY_RPC_CALL, method, params),
   getGatewayAuthToken: () => ipcRenderer.invoke(IPC_CHANNELS.GATEWAY_AUTH_TOKEN),
@@ -63,4 +79,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on(IPC_EVENTS.OPENCLAW_INSTALL_EXIT, callback)
     return () => ipcRenderer.off(IPC_EVENTS.OPENCLAW_INSTALL_EXIT, callback)
   },
+  onAuthLoginOutput: (callback: (...args: unknown[]) => void) => {
+    ipcRenderer.on(IPC_EVENTS.OPENCLAW_AUTH_LOGIN_OUTPUT, callback)
+    return () => ipcRenderer.off(IPC_EVENTS.OPENCLAW_AUTH_LOGIN_OUTPUT, callback)
+  },
+  onAuthLoginExit: (callback: (...args: unknown[]) => void) => {
+    ipcRenderer.on(IPC_EVENTS.OPENCLAW_AUTH_LOGIN_EXIT, callback)
+    return () => ipcRenderer.off(IPC_EVENTS.OPENCLAW_AUTH_LOGIN_EXIT, callback)
+  },
+  onAuthLoginPrompt: (callback: (...args: unknown[]) => void) => {
+    ipcRenderer.on(IPC_EVENTS.OPENCLAW_AUTH_LOGIN_PROMPT, callback)
+    return () => ipcRenderer.off(IPC_EVENTS.OPENCLAW_AUTH_LOGIN_PROMPT, callback)
+  },
+  replyAuthPrompt: (value: string) =>
+    ipcRenderer.invoke(IPC_CHANNELS.OPENCLAW_AUTH_PROMPT_REPLY, value),
 })
