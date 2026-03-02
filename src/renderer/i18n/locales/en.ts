@@ -110,4 +110,111 @@ export const en = {
   // OAuth prompt patterns (from backend)
   'auth.prompt.verificationCode': 'Your verification code is: {code}',
   'auth.prompt.copyAndSubmit': 'Copy this code, then click Submit to open the browser.',
+
+  // Setup Steps
+  'setup.step.install': 'Installation',
+  'setup.step.providers': 'API Authentication',
+  'setup.step.channels': 'Channels',
+
+  // Channel Section
+  'channels.title': 'Channels',
+  'channels.loading': 'Loading channels...',
+  'channels.empty': 'No channels configured. Add a channel to connect OpenClaw to messaging platforms.',
+  'channels.addChannel': 'Add Channel',
+  'channels.statusConfigured': 'configured',
+  'channels.statusNotConfigured': 'not configured',
+  'channels.notPaired': 'not paired',
+  'channels.channelType': 'Type',
+  'channels.accountId': 'Account ID',
+  'channels.displayName': 'Display Name',
+  'channels.displayNamePlaceholder': 'Optional display name',
+  'channels.restartBanner': 'Channel config updated. Restart gateway to apply changes.',
+  'channels.installFirst': 'Install OpenClaw first to configure channels.',
+  'channels.cliOnly': 'This channel requires CLI setup. Run the command below in your terminal:',
+
+  // Channel Modal
+  'channels.modal.selectType': 'Select Channel Type',
+  'channels.modal.configure': 'Configure Channel',
+  'channels.modal.accessPolicy': 'Access Policy',
+  'channels.modal.back': 'Back',
+  'channels.modal.next': 'Next',
+
+  // Done Step — Next Steps & Pairing Guidance
+  'channels.modal.doneTitle': 'Channel Added',
+  'channels.done.saved': '{channel} has been saved to your configuration.',
+  'channels.done.nextSteps': 'Next steps:',
+  'channels.done.stepRestart': 'Restart the gateway to activate the new channel.',
+  'channels.done.stepOpen.telegram': 'Open Telegram and find your bot. Send /start to begin.',
+  'channels.done.stepOpen.discord': 'Invite your bot to a Discord server and send it a message.',
+  'channels.done.stepOpen.slack': 'Go to your Slack workspace and message the bot directly.',
+  'channels.done.stepOpen.signal': 'Send a message to your Signal bot number.',
+  'channels.done.stepOpen.feishu': 'Open Feishu and find your bot. Send a message to begin.',
+  'channels.done.stepOpen.whatsapp': 'Scan the QR code when the gateway starts.',
+  'channels.done.stepPairing': 'Complete pairing to link your identity:',
+  'channels.done.pairingFlow1': 'Message the bot first — it will reply with an 8-character pairing code.',
+  'channels.done.pairCodePlaceholder': '00000000',
+  'channels.done.pair': 'Pair',
+  'channels.done.pairingSuccess': 'Paired successfully! You can now chat through this channel.',
+  'channels.done.restartFirst': 'Restart the gateway first, then message the bot to get a code.',
+  'channels.done.restarted': 'Restarted',
+  'channels.done.close': 'Done',
+
+  // DM Policies
+  'channels.policy.description': 'Choose how OpenClaw handles direct messages on this channel.',
+  'channels.policy.pairing': 'Pairing',
+  'channels.policy.pairingDesc': 'Users must pair with a code before chatting. Default and recommended.',
+  'channels.policy.allowlist': 'Allowlist',
+  'channels.policy.allowlistDesc': 'Only pre-approved users can send DMs.',
+  'channels.policy.open': 'Open',
+  'channels.policy.openDesc': 'Anyone can send DMs without restrictions.',
+  'channels.policy.disabled': 'Disabled',
+  'channels.policy.disabledDesc': 'DMs are completely disabled.',
+
+  // Telegram
+  'channels.telegram.blurb': 'Connect via Telegram Bot',
+  'channels.telegram.botToken': 'Bot Token',
+  'channels.telegram.botTokenPlaceholder': 'Paste your bot token from @BotFather',
+  'channels.telegram.botTokenHelp': 'Open @BotFather on Telegram, send /newbot, and copy the token.',
+
+  // Discord
+  'channels.discord.blurb': 'Connect via Discord Bot',
+  'channels.discord.token': 'Bot Token',
+  'channels.discord.tokenPlaceholder': 'Paste your Discord bot token',
+  'channels.discord.tokenHelp': 'Create an app in the Discord Developer Portal and copy the bot token.',
+
+  // Slack
+  'channels.slack.blurb': 'Connect via Slack App',
+  'channels.slack.botToken': 'Bot Token (xoxb-...)',
+  'channels.slack.botTokenPlaceholder': 'xoxb-...',
+  'channels.slack.botTokenHelp': 'Bot User OAuth Token from your Slack app settings.',
+  'channels.slack.appToken': 'App Token (xapp-...)',
+  'channels.slack.appTokenPlaceholder': 'xapp-...',
+  'channels.slack.appTokenHelp': 'App-Level Token with connections:write scope. Enable Socket Mode.',
+
+  // WhatsApp
+  'channels.whatsapp.blurb': 'Connect via WhatsApp (QR login)',
+
+  // Signal
+  'channels.signal.blurb': 'Connect via Signal Messenger',
+  'channels.signal.number': 'Signal Number',
+  'channels.signal.numberPlaceholder': '+1234567890',
+  'channels.signal.cliPath': 'signal-cli Path',
+  'channels.signal.cliPathPlaceholder': '/usr/local/bin/signal-cli',
+  'channels.signal.cliPathHelp': 'Path to signal-cli binary. Leave empty for default.',
+
+  // Feishu
+  'channels.feishu.blurb': 'Connect via Feishu/Lark Bot',
+  'channels.feishu.appId': 'App ID',
+  'channels.feishu.appIdPlaceholder': 'cli_xxxxxxxxxxxxxxxx',
+  'channels.feishu.appIdHelp': 'Create an app at the Feishu Open Platform and copy the App ID.',
+  'channels.feishu.appSecret': 'App Secret',
+  'channels.feishu.appSecretPlaceholder': 'Paste your app secret',
+  'channels.feishu.appSecretHelp': 'Found under Credentials & Basic Info in the Feishu developer console.',
+  'channels.feishu.domain': 'Domain',
+  'channels.feishu.domainHelp': 'Choose Feishu for China or Lark for international.',
+
+  // Health Card — Channel Details
+  'health.channelLinked': 'linked',
+  'health.channelConfigured': 'configured',
+  'health.channelError': 'error',
 } as const

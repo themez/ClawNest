@@ -17,6 +17,10 @@ interface AppStore {
   authStatus: ModelsAuthStatus | null
   setAuthStatus: (status: ModelsAuthStatus) => void
 
+  // Setup page section collapse state
+  setupSectionsOpen: Record<number, boolean>
+  setSetupSectionOpen: (step: number, open: boolean) => void
+
   setTheme: (theme: 'light' | 'dark' | 'system') => void
   setLanguage: (lang: string) => void
   toggleSidebar: () => void
@@ -36,6 +40,10 @@ export const useAppStore = create<AppStore>((set) => ({
 
   authStatus: null,
   setAuthStatus: (authStatus) => set({ authStatus }),
+
+  setupSectionsOpen: {},
+  setSetupSectionOpen: (step, open) =>
+    set((s) => ({ setupSectionsOpen: { ...s.setupSectionsOpen, [step]: open } })),
 
   setTheme: (theme) => set({ theme }),
   setLanguage: (language) => {

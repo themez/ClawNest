@@ -3,12 +3,38 @@
  * Manually mirrored from OpenClaw source — NOT imported.
  */
 
+export interface ChannelProbe {
+  ok: boolean
+  status?: string | null
+  error?: string | null
+  elapsedMs?: number
+  bot?: {
+    id: number
+    username: string
+    canJoinGroups?: boolean
+    canReadAllGroupMessages?: boolean
+    supportsInlineQueries?: boolean
+  }
+  webhook?: {
+    url: string
+    hasCustomCert: boolean
+  }
+}
+
 export interface ChannelHealthSummary {
   accountId?: string
   configured?: boolean
+  running?: boolean
   linked?: boolean
+  probe?: ChannelProbe
   lastProbeAt?: number | null
+  lastStartAt?: number | null
+  lastStopAt?: number | null
+  lastError?: string | null
   error?: string
+  tokenSource?: string
+  mode?: string | null
+  accounts?: Record<string, ChannelHealthSummary>
 }
 
 export interface AgentHeartbeatSummary {
@@ -105,6 +131,13 @@ export interface ModelsAuthStatus {
   missingProvidersInUse: string[]
   providersWithOAuth: string[]
   providers: AuthProviderStatus[]
+}
+
+export interface ConfiguredChannelInfo {
+  id: string
+  accountId: string
+  name?: string
+  configured: boolean
 }
 
 export interface EnvironmentInfo {

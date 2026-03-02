@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
+// Card wrapper removed — parent CollapsibleSection provides the Card shell
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -536,17 +536,10 @@ export function ApiAuthSection() {
 
   if (loading) {
     return (
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">{t('auth.title')}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            {t('auth.loading')}
-          </div>
-        </CardContent>
-      </Card>
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin" />
+        {t('auth.loading')}
+      </div>
     )
   }
 
@@ -680,11 +673,7 @@ export function ApiAuthSection() {
 
   return (
     <>
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">{t('auth.title')}</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
+      <div className="space-y-3">
           {/* Default Model */}
           <div className="space-y-2">
             <label className="text-xs font-medium text-muted-foreground">{t('auth.defaultModel')}</label>
@@ -789,8 +778,7 @@ export function ApiAuthSection() {
             <Plus className="h-3 w-3" />
             {t('auth.addProvider')}
           </Button>
-        </CardContent>
-      </Card>
+      </div>
 
       {/* Add Provider Modal */}
       <AddProviderModal

@@ -72,6 +72,8 @@ export class GatewayClient extends EventEmitter {
   private port = DEFAULT_GATEWAY_PORT
   private onAuthComplete: (() => void) | null = null
   private onAuthFailed: ((err: Error) => void) | null = null
+  /** Cached probe results — only updated when probe data is present, never cleared */
+  private probeCache = new Map<string, unknown>()
 
   setWindow(win: BrowserWindow) {
     this.win = win
@@ -176,7 +178,7 @@ export class GatewayClient extends EventEmitter {
     const id = randomUUID()
     const frame: RequestFrame = { type: 'req', id, method, params }
 
-    return new Promise((resolve, reject) => {
+    const result = await new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(id)
         reject(new Error(`Gateway RPC timeout: ${method}`))
@@ -195,6 +197,12 @@ export class GatewayClient extends EventEmitter {
 
       this.ws!.send(JSON.stringify(frame))
     })
+
+    // Enrich health RPC responses with cached probe data
+    if (method === 'health' && result && typeof result === 'object') {
+      return this.enrichHealthWithProbes(result as HealthSummary)
+    }
+    return result
   }
 
   // ---------------------------------------------------------------------------
@@ -268,7 +276,8 @@ export class GatewayClient extends EventEmitter {
         },
       })
     } else if (frame.event === 'health') {
-      this.sendToRenderer(IPC_EVENTS.GATEWAY_HEALTH_UPDATE, frame.payload as HealthSummary)
+      const enriched = this.enrichHealthWithProbes(frame.payload as HealthSummary)
+      this.sendToRenderer(IPC_EVENTS.GATEWAY_HEALTH_UPDATE, enriched)
     }
   }
 
@@ -289,6 +298,32 @@ export class GatewayClient extends EventEmitter {
         })
       }
     }, delay)
+  }
+
+  // ---------------------------------------------------------------------------
+  // Health probe caching
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Cache probe results from health data and backfill missing probes.
+   * Gateway health events often omit probe data that was present in
+   * the initial RPC response — this ensures probe results persist.
+   */
+  private enrichHealthWithProbes(health: HealthSummary): HealthSummary {
+    const channels = health.channels
+    if (!channels) return health
+
+    for (const [key, ch] of Object.entries(channels)) {
+      // Cache probe when present
+      if (ch.probe) {
+        this.probeCache.set(key, ch.probe)
+      }
+      // Backfill probe from cache when missing
+      if (!ch.probe && this.probeCache.has(key)) {
+        channels[key] = { ...ch, probe: this.probeCache.get(key) as HealthSummary['channels'][string]['probe'] }
+      }
+    }
+    return health
   }
 
   // ---------------------------------------------------------------------------

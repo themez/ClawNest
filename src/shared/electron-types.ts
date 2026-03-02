@@ -1,4 +1,4 @@
-import type { EnvironmentInfo, HealthSummary, ModelsAuthStatus } from './openclaw-types'
+import type { EnvironmentInfo, HealthSummary, ModelsAuthStatus, ConfiguredChannelInfo } from './openclaw-types'
 
 /**
  * Typed contract for the preload bridge (window.electronAPI).
@@ -36,6 +36,12 @@ export interface ElectronIPC {
   listModels: () => Promise<{ key: string; name: string; available: boolean }[]>
   setDefaultModel: (model: string) => Promise<{ success: boolean; error?: string }>
   enablePlugin: (pluginId: string) => Promise<{ success: boolean; error?: string }>
+
+  // Channels
+  getChannelsList: () => Promise<ConfiguredChannelInfo[]>
+  saveChannelConfig: (channelId: string, accountId: string, config: Record<string, string>) => Promise<{ success: boolean; error?: string }>
+  deleteChannelConfig: (channelId: string, accountId?: string) => Promise<{ success: boolean; error?: string }>
+  pairChannel: (channel: string, code: string) => Promise<{ success: boolean; error?: string }>
 
   // Gateway
   startGateway: () => Promise<void>

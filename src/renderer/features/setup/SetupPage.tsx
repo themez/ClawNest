@@ -1,13 +1,25 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { useNavigate } from '@tanstack/react-router'
-import { CheckCircle2, XCircle, Loader2, Play, Square, Trash2 } from 'lucide-react'
+import {
+  CheckCircle2,
+  XCircle,
+  Loader2,
+  Play,
+  Square,
+  Trash2,
+  ChevronDown,
+  ChevronRight,
+  AlertTriangle,
+  Minus,
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { useElectron } from '@/hooks/useElectron'
 import { useAppStore } from '@/stores/app-store'
 import { useTranslation } from '@/i18n'
-import type { EnvironmentInfo } from '@shared/openclaw-types'
+import type { EnvironmentInfo, ModelsAuthStatus } from '@shared/openclaw-types'
 import { ApiAuthSection } from './ApiAuthSection'
+import { ChannelSection } from './ChannelSection'
 
 type DetectStatus = 'idle' | 'checking' | 'installed' | 'not-installed'
 
@@ -18,6 +30,83 @@ interface EnvItem {
   path?: string
 }
 
+type SectionStatus = 'complete' | 'warning' | 'pending' | 'optional'
+
+/* ================================================================== */
+/*  CollapsibleSection                                                  */
+/* ================================================================== */
+
+function CollapsibleSection({
+  title,
+  step,
+  status,
+  defaultOpen = true,
+  children,
+}: {
+  title: string
+  step: number
+  status: SectionStatus
+  defaultOpen?: boolean
+  children: React.ReactNode
+}) {
+  const storedOpen = useAppStore((s) => s.setupSectionsOpen[step])
+  const setStoredOpen = useAppStore((s) => s.setSetupSectionOpen)
+  const open = storedOpen ?? defaultOpen
+  const setOpen = (v: boolean) => setStoredOpen(step, v)
+
+  // Auto-collapse when status transitions to 'complete'
+  const prevStatusRef = useRef(status)
+  useEffect(() => {
+    if (prevStatusRef.current !== 'complete' && status === 'complete') {
+      setOpen(false)
+    }
+    prevStatusRef.current = status
+  }, [status])
+
+  const statusIcon = () => {
+    switch (status) {
+      case 'complete':
+        return <CheckCircle2 className="h-4 w-4 text-green-500" />
+      case 'warning':
+        return <AlertTriangle className="h-4 w-4 text-yellow-500" />
+      case 'optional':
+        return <Minus className="h-4 w-4 text-muted-foreground" />
+      default:
+        return <div className="h-4 w-4 rounded-full border-2 border-muted-foreground" />
+    }
+  }
+
+  return (
+    <Card>
+      <div
+        className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-muted/30 transition-colors"
+        onClick={() => setOpen(!open)}
+      >
+        <div className="flex items-center gap-3">
+          {open ? (
+            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+          ) : (
+            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+          )}
+          <span className="text-base font-semibold">
+            {step}. {title}
+          </span>
+        </div>
+        {statusIcon()}
+      </div>
+      {open && (
+        <CardContent className="pt-0 pb-4">
+          {children}
+        </CardContent>
+      )}
+    </Card>
+  )
+}
+
+/* ================================================================== */
+/*  SetupPage                                                           */
+/* ================================================================== */
+
 export function SetupPage() {
   const electron = useElectron()
   const navigate = useNavigate()
@@ -27,12 +116,14 @@ export function SetupPage() {
   const envChecking = useAppStore((s) => s.envChecking)
   const setEnvInfo = useAppStore((s) => s.setEnvInfo)
   const setEnvChecking = useAppStore((s) => s.setEnvChecking)
+  const cachedAuthStatus = useAppStore((s) => s.authStatus)
 
   const [installOutput, setInstallOutput] = useState<string[]>([])
   const [installVisible, setInstallVisible] = useState(false)
   const [installing, setInstalling] = useState(false)
   const [startingDaemon, setStartingDaemon] = useState(false)
   const [startError, setStartError] = useState<string | null>(null)
+  const [hasChannels, setHasChannels] = useState(false)
   const logRef = useRef<HTMLDivElement>(null)
 
   const detectEnv = useCallback(async () => {
@@ -92,6 +183,19 @@ export function SetupPage() {
   const { node: nodeStatus, openclaw: openclawStatus } = envToItems(envInfo, envChecking)
   const daemonRunning = envInfo?.gatewayRunning ?? false
   const allReady = nodeStatus.status === 'installed' && openclawStatus.status === 'installed'
+
+  // Section statuses
+  const installStatus: SectionStatus =
+    nodeStatus.status === 'installed' && openclawStatus.status === 'installed'
+      ? 'complete'
+      : 'pending'
+
+  const providerStatus: SectionStatus = (() => {
+    const providers = cachedAuthStatus?.providers ?? []
+    return providers.some((p) => p.status === 'ok') ? 'complete' : 'pending'
+  })()
+
+  const channelStatus: SectionStatus = hasChannels ? 'complete' : 'optional'
 
   const handleInstallNode = () => {
     electron.openLink('https://nodejs.org/')
@@ -198,7 +302,7 @@ export function SetupPage() {
   }
 
   return (
-    <div className="flex flex-col gap-6 max-w-2xl mx-auto">
+    <div className="flex flex-col gap-4 max-w-2xl mx-auto">
       <div>
         <h1 className="text-2xl font-bold">{t('setup.title')}</h1>
         <p className="text-muted-foreground mt-1">
@@ -206,12 +310,13 @@ export function SetupPage() {
         </p>
       </div>
 
-      {/* Environment Status */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">{t('setup.environment')}</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-3">
+      {/* Section 1: Installation */}
+      <CollapsibleSection
+        title={t('setup.step.install')}
+        step={1}
+        status={installStatus}
+      >
+        <div className="flex flex-col gap-3">
           <StatusRow
             item={nodeStatus}
             onInstall={handleInstallNode}
@@ -225,15 +330,13 @@ export function SetupPage() {
             uninstallLabel={t('setup.uninstall')}
             installing={installing}
           />
-        </CardContent>
-      </Card>
+        </div>
 
-      {/* Install Log */}
-      {installVisible && (
-        <Card>
-          <CardHeader className="pb-2">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-base">{t('setup.installLog')}</CardTitle>
+        {/* Install Log */}
+        {installVisible && (
+          <div className="mt-3">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-medium">{t('setup.installLog')}</span>
               {!installing && (
                 <Button
                   variant="ghost"
@@ -244,8 +347,6 @@ export function SetupPage() {
                 </Button>
               )}
             </div>
-          </CardHeader>
-          <CardContent>
             <div
               ref={logRef}
               className="h-48 overflow-y-auto rounded-md bg-background border p-3 font-mono text-xs leading-5 whitespace-pre-wrap"
@@ -255,19 +356,39 @@ export function SetupPage() {
               ))}
               {installing && <InstallingIndicator />}
             </div>
-          </CardContent>
-        </Card>
-      )}
+          </div>
+        )}
+      </CollapsibleSection>
 
-      {/* API Authentication */}
-      {openclawStatus.status === 'installed' && <ApiAuthSection />}
+      {/* Section 2: API Authentication */}
+      <CollapsibleSection
+        title={t('setup.step.providers')}
+        step={2}
+        status={providerStatus}
+      >
+        {openclawStatus.status === 'installed' ? (
+          <ApiAuthSection />
+        ) : (
+          <p className="text-sm text-muted-foreground">{t('channels.installFirst')}</p>
+        )}
+      </CollapsibleSection>
 
-      {/* Run Control */}
+      {/* Section 3: Channels */}
+      <CollapsibleSection
+        title={t('setup.step.channels')}
+        step={3}
+        status={channelStatus}
+      >
+        {openclawStatus.status === 'installed' ? (
+          <ChannelSection onStatusChange={setHasChannels} />
+        ) : (
+          <p className="text-sm text-muted-foreground">{t('channels.installFirst')}</p>
+        )}
+      </CollapsibleSection>
+
+      {/* Run Control — always visible */}
       <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">{t('setup.runOpenclaw')}</CardTitle>
-        </CardHeader>
-        <CardContent>
+        <CardContent className="py-4">
           {daemonRunning ? (
             <Button
               size="lg"

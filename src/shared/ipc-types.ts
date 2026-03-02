@@ -29,6 +29,11 @@ export const IPC_CHANNELS = {
   OPENCLAW_AUTH_OAUTH_CANCEL: 'openclaw:auth-oauth-cancel',
   OPENCLAW_AUTH_PROMPT_REPLY: 'openclaw:auth-prompt-reply',
   OPENCLAW_PROVIDER_ENDPOINTS: 'openclaw:provider-endpoints',
+  // Channels
+  OPENCLAW_CHANNELS_LIST: 'openclaw:channels-list',
+  OPENCLAW_CHANNELS_SAVE: 'openclaw:channels-save',
+  OPENCLAW_CHANNELS_DELETE: 'openclaw:channels-delete',
+  OPENCLAW_CHANNELS_PAIR: 'openclaw:channels-pair',
   // Gateway
   GATEWAY_CONNECT: 'gateway:connect',
   GATEWAY_DISCONNECT: 'gateway:disconnect',

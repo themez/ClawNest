@@ -41,6 +41,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
   enablePlugin: (pluginId: string) =>
     ipcRenderer.invoke(IPC_CHANNELS.OPENCLAW_PLUGINS_ENABLE, pluginId),
 
+  // ─── Channels ──────────────────────────────────────────────────────────
+  getChannelsList: () => ipcRenderer.invoke(IPC_CHANNELS.OPENCLAW_CHANNELS_LIST),
+  saveChannelConfig: (channelId: string, accountId: string, config: Record<string, string>) =>
+    ipcRenderer.invoke(IPC_CHANNELS.OPENCLAW_CHANNELS_SAVE, channelId, accountId, config),
+  deleteChannelConfig: (channelId: string, accountId?: string) =>
+    ipcRenderer.invoke(IPC_CHANNELS.OPENCLAW_CHANNELS_DELETE, channelId, accountId),
+  pairChannel: (channel: string, code: string) =>
+    ipcRenderer.invoke(IPC_CHANNELS.OPENCLAW_CHANNELS_PAIR, channel, code),
+
   // ─── Gateway ─────────────────────────────────────────────────────────────
   startGateway: () => ipcRenderer.invoke(IPC_CHANNELS.GATEWAY_CONNECT),
   disconnectGateway: () => ipcRenderer.invoke(IPC_CHANNELS.GATEWAY_DISCONNECT),

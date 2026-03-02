@@ -1,6 +1,6 @@
 import { app, BrowserWindow, ipcMain, nativeTheme, shell } from 'electron'
 import { join } from 'node:path'
-import { spawn } from 'node:child_process'
+import { spawn, type ChildProcess } from 'node:child_process'
 import { createConnection } from 'node:net'
 import { readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { homedir } from 'node:os'
@@ -14,9 +14,11 @@ import type { StoreSchema } from './store'
 import { getWindowState, saveWindowState } from './window-state'
 import { performOAuthLogin, isOAuthSupported, getOAuthProviderIds } from './openclaw/openai-codex-oauth'
 import { upsertAuthProfile, applyAuthProfileToConfig, deleteAuthForProvider, saveProviderApiKey, getProviderEndpoints } from './openclaw/auth-store'
+import { getConfiguredChannels, saveChannelConfig, deleteChannelConfig } from './openclaw/channel-store'
 
 let mainWindow: BrowserWindow | null = null
 let gatewayConnectInFlight: Promise<void> | null = null
+let gatewayProcess: ChildProcess | null = null
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -63,16 +65,89 @@ function ensureGatewayMode(): void {
   }
 }
 
-/** Ensure gateway is installed as a system service (launchd/systemd/schtasks). */
-async function ensureGatewayInstalled(): Promise<void> {
-  try {
-    const result = await openclawCli.exec(['gateway', 'install'], 15_000)
-    if (result.exitCode !== 0 && !result.stderr.includes('already installed')) {
-      console.log(`[clawbox] gateway install: ${result.stderr}`)
-    }
-  } catch (err) {
-    console.log(`[clawbox] gateway install failed: ${err}`)
+// ---------------------------------------------------------------------------
+// Gateway subprocess management
+// Replaces launchd service management with direct child process spawning.
+// See: https://github.com/openclaw/openclaw/issues/3780
+//      https://github.com/openclaw/openclaw/issues/22972
+// ---------------------------------------------------------------------------
+
+async function startGateway(port: number): Promise<void> {
+  // If gateway is already reachable (external or already spawned), reuse it
+  if (await probeGateway(port)) {
+    console.log('[clawbox] gateway already running, reusing')
+    return
   }
+
+  ensureGatewayMode()
+
+  console.log(`[clawbox] spawning gateway subprocess: openclaw gateway --port ${port}`)
+
+  const child = spawn('openclaw', ['gateway', '--port', String(port)], {
+    stdio: ['ignore', 'pipe', 'pipe'],
+    detached: false,
+  })
+
+  gatewayProcess = child
+
+  child.stdout?.on('data', (d: Buffer) => {
+    console.log(`[gateway:stdout] ${d.toString().trimEnd()}`)
+  })
+  child.stderr?.on('data', (d: Buffer) => {
+    console.log(`[gateway:stderr] ${d.toString().trimEnd()}`)
+  })
+  child.on('exit', (code, signal) => {
+    console.log(`[clawbox] gateway process exited code=${code} signal=${signal}`)
+    if (gatewayProcess === child) {
+      gatewayProcess = null
+    }
+  })
+  child.on('error', (err) => {
+    console.error('[clawbox] gateway process error:', err)
+    if (gatewayProcess === child) {
+      gatewayProcess = null
+    }
+  })
+
+  if (!await waitForGateway(port, 20_000)) {
+    // Cleanup on failure
+    try { child.kill('SIGKILL') } catch { /* ignore */ }
+    gatewayProcess = null
+    throw new Error('Gateway did not start within 20s')
+  }
+
+  console.log('[clawbox] gateway subprocess started and port reachable')
+}
+
+async function stopGateway(): Promise<void> {
+  const child = gatewayProcess
+  if (!child) return // External gateway or not running — nothing to do
+
+  console.log('[clawbox] stopping gateway subprocess…')
+  gatewayProcess = null
+
+  // SIGTERM → wait up to 5s → SIGKILL
+  return new Promise<void>((resolve) => {
+    let settled = false
+    const settle = () => {
+      if (settled) return
+      settled = true
+      resolve()
+    }
+
+    child.on('exit', settle)
+
+    try { child.kill('SIGTERM') } catch { settle(); return }
+
+    setTimeout(() => {
+      if (!settled) {
+        console.log('[clawbox] gateway did not exit in 5s, sending SIGKILL')
+        try { child.kill('SIGKILL') } catch { /* ignore */ }
+      }
+      // Give SIGKILL a moment to take effect
+      setTimeout(settle, 500)
+    }, 5_000)
+  })
 }
 
 // ---------------------------------------------------------------------------
@@ -194,9 +269,9 @@ function registerIpcHandlers() {
   })
 
   ipcMain.handle(IPC_CHANNELS.OPENCLAW_UNINSTALL, async (event) => {
-    // Stop and uninstall gateway service before removing openclaw
+    // Stop subprocess and clean up any old launchd plist
     gatewayClient.disconnect()
-    try { await openclawCli.exec(['gateway', 'stop'], 10_000) } catch { /* ignore */ }
+    await stopGateway()
     try { await openclawCli.exec(['gateway', 'uninstall'], 10_000) } catch { /* ignore */ }
 
     const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm'
@@ -422,42 +497,58 @@ function registerIpcHandlers() {
     }
   })
 
-  // ─── Gateway (managed via `openclaw gateway install/start/stop/restart`) ─
+  // ─── Channels ──────────────────────────────────────────────────────
+  ipcMain.handle(IPC_CHANNELS.OPENCLAW_CHANNELS_LIST, () => {
+    try {
+      return getConfiguredChannels()
+    } catch {
+      return []
+    }
+  })
+
+  ipcMain.handle(
+    IPC_CHANNELS.OPENCLAW_CHANNELS_SAVE,
+    async (_e, channelId: string, accountId: string, config: Record<string, string>) => {
+      try {
+        saveChannelConfig(channelId, accountId, config)
+        return { success: true }
+      } catch (err) {
+        return { success: false, error: err instanceof Error ? err.message : 'Unknown error' }
+      }
+    },
+  )
+
+  ipcMain.handle(
+    IPC_CHANNELS.OPENCLAW_CHANNELS_DELETE,
+    async (_e, channelId: string, accountId?: string) => {
+      try {
+        deleteChannelConfig(channelId, accountId)
+        return { success: true }
+      } catch (err) {
+        return { success: false, error: err instanceof Error ? err.message : 'Failed to delete' }
+      }
+    },
+  )
+
+  ipcMain.handle(IPC_CHANNELS.OPENCLAW_CHANNELS_PAIR, async (_e, channel: string, code: string) => {
+    try {
+      const result = await openclawCli.exec(['pairing', 'approve', channel, code], 15_000)
+      if (result.exitCode === 0) {
+        return { success: true }
+      }
+      return { success: false, error: result.stderr || result.stdout || `Exit code ${result.exitCode}` }
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : 'Pairing failed' }
+    }
+  })
+
+  // ─── Gateway (managed as subprocess) ─────────────────────────────────
   ipcMain.handle(IPC_CHANNELS.GATEWAY_CONNECT, async () => {
     if (gatewayConnectInFlight) return gatewayConnectInFlight
 
     gatewayConnectInFlight = (async () => {
       try {
-        // 1. If already reachable, just connect the WS client
-        const reachable = await probeGateway(DEFAULT_GATEWAY_PORT)
-        console.log(`[clawbox] gateway probe port=${DEFAULT_GATEWAY_PORT} reachable=${reachable}`)
-
-        if (reachable) {
-          console.log('[clawbox] gateway already running, connecting WS client…')
-          await gatewayClient.connect(DEFAULT_GATEWAY_PORT)
-          console.log('[clawbox] gateway WS connected')
-          return
-        }
-
-        // 2. Ensure config prerequisites
-        ensureGatewayMode()
-
-        // 3. Ensure gateway is installed as a system service
-        console.log('[clawbox] installing gateway service…')
-        await ensureGatewayInstalled()
-
-        // 4. Start via service manager (launchd/systemd/schtasks)
-        console.log('[clawbox] starting gateway service…')
-        const startResult = await openclawCli.exec(['gateway', 'start'], 15_000)
-        console.log(`[clawbox] gateway start exit=${startResult.exitCode} stdout=${startResult.stdout.slice(0, 200)} stderr=${startResult.stderr.slice(0, 200)}`)
-
-        if (!await waitForGateway(DEFAULT_GATEWAY_PORT, 20_000)) {
-          throw new Error(
-            'Gateway did not start within 20s. Check ~/.openclaw/logs/gateway.err.log',
-          )
-        }
-
-        console.log('[clawbox] gateway port reachable, connecting WS…')
+        await startGateway(DEFAULT_GATEWAY_PORT)
         await gatewayClient.connect(DEFAULT_GATEWAY_PORT)
         console.log('[clawbox] gateway WS connected')
       } catch (err) {
@@ -477,20 +568,14 @@ function registerIpcHandlers() {
 
   ipcMain.handle(IPC_CHANNELS.GATEWAY_STOP, async () => {
     gatewayClient.disconnect()
-    await openclawCli.exec(['gateway', 'stop'], 15_000)
+    await stopGateway()
   })
 
   ipcMain.handle(IPC_CHANNELS.GATEWAY_RESTART, async () => {
     gatewayClient.disconnect()
-    await openclawCli.exec(['gateway', 'restart'], 15_000)
-
-    // Give the gateway process time to shut down before probing
-    await new Promise((r) => setTimeout(r, 3000))
-
-    if (!await waitForGateway(DEFAULT_GATEWAY_PORT, 30_000)) {
-      throw new Error('Gateway did not restart within 30s')
-    }
-
+    await stopGateway()
+    await new Promise((r) => setTimeout(r, 500))
+    await startGateway(DEFAULT_GATEWAY_PORT)
     await gatewayClient.connect(DEFAULT_GATEWAY_PORT)
   })
 
@@ -543,6 +628,10 @@ app.on('window-all-closed', () => {
 })
 
 app.on('will-quit', () => {
-  // Disconnect WS client — gateway service keeps running independently
   gatewayClient.disconnect()
+  // Stop gateway subprocess if we spawned it (external gateways are left alone)
+  if (gatewayProcess) {
+    try { gatewayProcess.kill('SIGTERM') } catch { /* ignore */ }
+    gatewayProcess = null
+  }
 })
