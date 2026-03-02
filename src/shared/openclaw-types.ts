@@ -1,5 +1,5 @@
 /**
- * Curated OpenClaw protocol types for ClawBox.
+ * Curated OpenClaw protocol types for ClawNest.
  * Manually mirrored from OpenClaw source — NOT imported.
  */
 

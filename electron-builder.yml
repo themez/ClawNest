@@ -1,5 +1,5 @@
-appId: ai.openclaw.clawbox
-productName: ClawBox
+appId: ai.openclaw.clawnest
+productName: ClawNest
 
 directories:
   output: dist
@@ -34,4 +34,4 @@ nsis:
 publish:
   provider: github
   owner: "<owner>"
-  repo: clawbox
+  repo: clawnest

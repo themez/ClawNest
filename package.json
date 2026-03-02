@@ -1,7 +1,7 @@
 {
-  "name": "clawbox",
+  "name": "clawnest",
   "version": "0.1.0",
-  "description": "ClawBox — an Electron desktop app for OpenClaw",
+  "description": "ClawNest — an Electron desktop app for OpenClaw",
   "private": true,
   "main": "./out/main/main.js",
   "scripts": {

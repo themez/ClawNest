@@ -2,7 +2,7 @@ import type { Translations } from '..'
 
 export const zh: Translations = {
   // App
-  'app.name': 'ClawBox',
+  'app.name': 'ClawNest',
 
   // Sidebar
   'sidebar.setup': '设置',
@@ -55,7 +55,7 @@ export const zh: Translations = {
   'setup.notReady': '请先安装 Node.js 和 OpenClaw 以启用此按钮。',
   'setup.starting': '正在启动网关，最多需要 20 秒...',
   'setup.stopping': '正在停止...',
-  'setup.gatewayStillRunning': '网关仍在运行，可能是在 ClawBox 外部启动的。',
+  'setup.gatewayStillRunning': '网关仍在运行，可能是在 ClawNest 外部启动的。',
   'setup.install': '安装',
   'setup.download': '下载',
   'setup.uninstall': '卸载',

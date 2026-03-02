@@ -8,7 +8,7 @@ export interface OAuthResult {
 }
 
 /**
- * All OAuth providers supported by clawbox.
+ * All OAuth providers supported by clawnest.
  * pi-ai providers + device-code providers implemented here.
  */
 const SUPPORTED_OAUTH_PROVIDERS = new Set([

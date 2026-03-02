@@ -1,6 +1,6 @@
 export const en = {
   // App
-  'app.name': 'ClawBox',
+  'app.name': 'ClawNest',
 
   // Sidebar
   'sidebar.setup': 'Setup',
@@ -53,7 +53,7 @@ export const en = {
   'setup.notReady': 'Install Node.js and OpenClaw first to enable this button.',
   'setup.starting': 'Starting gateway, this may take up to 20 seconds...',
   'setup.stopping': 'Stopping...',
-  'setup.gatewayStillRunning': 'Gateway is still running. It may have been started outside ClawBox.',
+  'setup.gatewayStillRunning': 'Gateway is still running. It may have been started outside ClawNest.',
   'setup.install': 'Install',
   'setup.download': 'Download',
   'setup.uninstall': 'Uninstall',

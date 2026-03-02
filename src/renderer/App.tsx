@@ -1,3 +1,3 @@
 export function App() {
-  return <div>ClawBox</div>
+  return <div>ClawNest</div>
 }

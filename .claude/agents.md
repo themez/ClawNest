@@ -1,8 +1,8 @@
-# ClawBox — Agent Guidelines
+# ClawNest — Agent Guidelines
 
 ## Project Overview
 
-ClawBox (`ai.openclaw.clawbox`) is an Electron desktop app serving as the GUI front-end for the OpenClaw AI agent gateway. It manages environment setup (Node.js, OpenClaw CLI), provider authentication (OAuth/API keys), messaging channel configuration, and real-time gateway monitoring via WebSocket.
+ClawNest (`ai.openclaw.clawnest`) is an Electron desktop app serving as the GUI front-end for the OpenClaw AI agent gateway. It manages environment setup (Node.js, OpenClaw CLI), provider authentication (OAuth/API keys), messaging channel configuration, and real-time gateway monitoring via WebSocket.
 
 ## Tech Stack
 

@@ -75,13 +75,13 @@ function ensureGatewayMode(): void {
 async function startGateway(port: number): Promise<void> {
   // If gateway is already reachable (external or already spawned), reuse it
   if (await probeGateway(port)) {
-    console.log('[clawbox] gateway already running, reusing')
+    console.log('[clawnest] gateway already running, reusing')
     return
   }
 
   ensureGatewayMode()
 
-  console.log(`[clawbox] spawning gateway subprocess: openclaw gateway --port ${port}`)
+  console.log(`[clawnest] spawning gateway subprocess: openclaw gateway --port ${port}`)
 
   const child = spawn('openclaw', ['gateway', '--port', String(port)], {
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -97,13 +97,13 @@ async function startGateway(port: number): Promise<void> {
     console.log(`[gateway:stderr] ${d.toString().trimEnd()}`)
   })
   child.on('exit', (code, signal) => {
-    console.log(`[clawbox] gateway process exited code=${code} signal=${signal}`)
+    console.log(`[clawnest] gateway process exited code=${code} signal=${signal}`)
     if (gatewayProcess === child) {
       gatewayProcess = null
     }
   })
   child.on('error', (err) => {
-    console.error('[clawbox] gateway process error:', err)
+    console.error('[clawnest] gateway process error:', err)
     if (gatewayProcess === child) {
       gatewayProcess = null
     }
@@ -116,14 +116,14 @@ async function startGateway(port: number): Promise<void> {
     throw new Error('Gateway did not start within 20s')
   }
 
-  console.log('[clawbox] gateway subprocess started and port reachable')
+  console.log('[clawnest] gateway subprocess started and port reachable')
 }
 
 async function stopGateway(): Promise<void> {
   const child = gatewayProcess
   if (!child) return // External gateway or not running — nothing to do
 
-  console.log('[clawbox] stopping gateway subprocess…')
+  console.log('[clawnest] stopping gateway subprocess…')
   gatewayProcess = null
 
   // SIGTERM → wait up to 5s → SIGKILL
@@ -141,7 +141,7 @@ async function stopGateway(): Promise<void> {
 
     setTimeout(() => {
       if (!settled) {
-        console.log('[clawbox] gateway did not exit in 5s, sending SIGKILL')
+        console.log('[clawnest] gateway did not exit in 5s, sending SIGKILL')
         try { child.kill('SIGKILL') } catch { /* ignore */ }
       }
       // Give SIGKILL a moment to take effect
@@ -550,9 +550,9 @@ function registerIpcHandlers() {
       try {
         await startGateway(DEFAULT_GATEWAY_PORT)
         await gatewayClient.connect(DEFAULT_GATEWAY_PORT)
-        console.log('[clawbox] gateway WS connected')
+        console.log('[clawnest] gateway WS connected')
       } catch (err) {
-        console.error('[clawbox] GATEWAY_CONNECT error:', err)
+        console.error('[clawnest] GATEWAY_CONNECT error:', err)
         throw err
       } finally {
         gatewayConnectInFlight = null

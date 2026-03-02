@@ -1,4 +1,4 @@
-export const APP_NAME = 'ClawBox'
+export const APP_NAME = 'ClawNest'
 
 export const DEFAULT_GATEWAY_PORT = 18789
 
