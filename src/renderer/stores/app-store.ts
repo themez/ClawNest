@@ -38,7 +38,10 @@ export const useAppStore = create<AppStore>((set) => ({
   setAuthStatus: (authStatus) => set({ authStatus }),
 
   setTheme: (theme) => set({ theme }),
-  setLanguage: (language) => set({ language }),
+  setLanguage: (language) => {
+    set({ language })
+    window.electronAPI?.setStoreValue('language', language)
+  },
   toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
   setGatewayConnected: (gatewayConnected) => set({ gatewayConnected }),
 }))

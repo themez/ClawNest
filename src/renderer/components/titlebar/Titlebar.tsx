@@ -1,11 +1,13 @@
 import { Minus, Square, X, Copy } from 'lucide-react'
 import { useElectron } from '@/hooks/useElectron'
 import { useEffect, useState } from 'react'
+import { useTranslation } from '@/i18n'
 
 const platform = typeof window !== 'undefined' ? window.electronAPI?.platform : 'darwin'
 
 export function Titlebar() {
   const electron = useElectron()
+  const { t } = useTranslation()
   const [isMaximized, setIsMaximized] = useState(false)
 
   useEffect(() => {
@@ -30,7 +32,7 @@ export function Titlebar() {
       className="flex h-[38px] w-full shrink-0 items-center justify-between border-b border-border"
       style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
     >
-      <div className="pl-3 text-xs font-medium text-muted-foreground">ClawBox</div>
+      <div className="pl-3 text-xs font-medium text-muted-foreground">{t('app.name')}</div>
       <div
         className="flex h-full items-stretch"
         style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}

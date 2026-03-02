@@ -4,6 +4,7 @@ import type { HealthSummary, StatusSummary } from '@shared/openclaw-types'
 import { DEFAULT_GATEWAY_PORT, HEALTH_POLL_INTERVAL } from '@shared/constants'
 import { useElectron } from '@/hooks/useElectron'
 import { useAppStore } from '@/stores/app-store'
+import { useTranslation } from '@/i18n'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { GatewayStatusCard } from './GatewayStatusCard'
@@ -14,6 +15,7 @@ export function DashboardView() {
   const setGatewayConnected = useAppStore((s) => s.setGatewayConnected)
   const gatewayConnected = useAppStore((s) => s.gatewayConnected)
   const envInfo = useAppStore((s) => s.envInfo)
+  const { t } = useTranslation()
 
   const [health, setHealth] = useState<HealthSummary | null>(null)
   const [statusSummary, setStatusSummary] = useState<StatusSummary | null>(null)
@@ -76,9 +78,9 @@ export function DashboardView() {
     <div className="flex flex-col gap-6 max-w-4xl">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Dashboard</h1>
+          <h1 className="text-2xl font-bold">{t('dashboard.title')}</h1>
           <p className="text-muted-foreground mt-1">
-            Monitor your OpenClaw gateway status.
+            {t('dashboard.description')}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -96,11 +98,11 @@ export function DashboardView() {
             }}
           >
             <ExternalLink className="h-3.5 w-3.5" />
-            Console
+            {t('dashboard.console')}
           </Button>
           <Button variant="outline" size="sm" onClick={fetchHealth}>
             <RefreshCw className="h-3.5 w-3.5" />
-            Refresh
+            {t('dashboard.refresh')}
           </Button>
         </div>
       </div>
@@ -111,25 +113,25 @@ export function DashboardView() {
           {gatewayConnected ? (
             <>
               <Wifi className="h-4 w-4 text-green-500" />
-              <span className="text-sm font-medium">Gateway Connected</span>
+              <span className="text-sm font-medium">{t('dashboard.gatewayConnected')}</span>
             </>
           ) : (
             <>
               <WifiOff className="h-4 w-4 text-destructive" />
-              <span className="text-sm font-medium">Gateway Disconnected</span>
+              <span className="text-sm font-medium">{t('dashboard.gatewayDisconnected')}</span>
               <Button
                 size="sm"
                 variant="outline"
                 className="ml-auto"
                 onClick={() => electron.startGateway().then(fetchHealth)}
               >
-                Connect
+                {t('dashboard.connect')}
               </Button>
             </>
           )}
           {lastChecked && (
             <span className="ml-auto text-xs text-muted-foreground">
-              Last checked: {lastChecked.toLocaleTimeString()}
+              {t('dashboard.lastChecked', { time: lastChecked.toLocaleTimeString() })}
             </span>
           )}
         </CardContent>

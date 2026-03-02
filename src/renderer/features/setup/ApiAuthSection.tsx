@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/dialog'
 import { useElectron } from '@/hooks/useElectron'
 import { useAppStore } from '@/stores/app-store'
+import { useTranslation } from '@/i18n'
 import {
   Key,
   CheckCircle2,
@@ -45,6 +46,7 @@ function AddProviderModal({
   electron,
   onSuccess,
 }: AddProviderModalProps) {
+  const { t, translatePrompt } = useTranslation()
   const [oauthRunning, setOauthRunning] = useState(false)
   const [oauthOutput, setOauthOutput] = useState<string[]>([])
   const [oauthExitCode, setOauthExitCode] = useState<number | null>(null)
@@ -132,7 +134,7 @@ function AddProviderModal({
     try {
       await electron.startOAuthLogin(provider)
     } catch {
-      setOauthOutput((prev) => [...prev, 'Failed to start OAuth login.\n'])
+      setOauthOutput((prev) => [...prev, t('auth.oauthFailed') + '\n'])
       setOauthRunning(false)
       setOauthExitCode(1)
     }
@@ -174,14 +176,14 @@ function AddProviderModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent preventClose={oauthRunning}>
         <DialogHeader>
-          <DialogTitle>Add Provider</DialogTitle>
+          <DialogTitle>{t('auth.addProvider')}</DialogTitle>
           {!oauthRunning && <DialogClose />}
         </DialogHeader>
 
         {/* OAuth Login buttons */}
         {oauthProviders.length > 0 && (
           <div className="space-y-2">
-            <label className="text-xs font-medium text-muted-foreground">OAuth Login</label>
+            <label className="text-xs font-medium text-muted-foreground">{t('auth.oauthLogin')}</label>
             <div className="grid gap-1.5 grid-cols-2">
               {oauthProviders.map((provider) => (
                 <Button
@@ -211,14 +213,14 @@ function AddProviderModal({
               <span className="w-full border-t" />
             </div>
             <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-card px-2 text-muted-foreground">or</span>
+              <span className="bg-card px-2 text-muted-foreground">{t('auth.or')}</span>
             </div>
           </div>
         )}
 
         {/* API Key / Token entry */}
         <div className="space-y-2">
-          <label className="text-xs font-medium text-muted-foreground">API Key / Token</label>
+          <label className="text-xs font-medium text-muted-foreground">{t('auth.apiKeyToken')}</label>
           <div className="flex gap-2">
             {knownProviders.length > 0 && !isCustomProvider ? (
               <select
@@ -248,16 +250,16 @@ function AddProviderModal({
                   }
                 }}
               >
-                <option value="">Provider...</option>
+                <option value="">{t('auth.providerPlaceholder')}</option>
                 {knownProviders.map((id) => (
                   <option key={id} value={id}>{id}</option>
                 ))}
-                <option value="__other__">Other...</option>
+                <option value="__other__">{t('auth.otherProvider')}</option>
               </select>
             ) : (
               <input
                 type="text"
-                placeholder="Provider ID"
+                placeholder={t('auth.providerIdPlaceholder')}
                 className="w-40 h-8 rounded-md border bg-background px-3 text-sm"
                 value={newProviderInput}
                 onChange={(e) => setNewProviderInput(e.target.value)}
@@ -277,7 +279,7 @@ function AddProviderModal({
             )}
             <input
               type="password"
-              placeholder="Paste API key or token"
+              placeholder={t('auth.pasteApiKey')}
               className="flex-1 h-8 rounded-md border bg-background px-3 text-sm"
               value={tokenInput}
               onChange={(e) => setTokenInput(e.target.value)}
@@ -290,7 +292,7 @@ function AddProviderModal({
               onClick={handleSaveToken}
               disabled={!newProviderInput.trim() || !tokenInput.trim() || saving}
             >
-              {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Save'}
+              {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : t('auth.save')}
             </Button>
           </div>
           {saveError && <p className="text-xs text-destructive">{saveError}</p>}
@@ -310,7 +312,7 @@ function AddProviderModal({
               {oauthRunning && !promptMessage && (
                 <span className="inline-flex items-center gap-1.5 text-muted-foreground">
                   <Loader2 className="inline h-3 w-3 animate-spin" />
-                  {oauthOutput.length === 0 && 'Starting OAuth flow...'}
+                  {oauthOutput.length === 0 && t('auth.startingOAuth')}
                 </span>
               )}
             </div>
@@ -323,16 +325,17 @@ function AddProviderModal({
                 className="w-full"
                 onClick={handleCancelOAuth}
               >
-                Cancel
+                {t('auth.cancel')}
               </Button>
             )}
 
             {/* Prompt input — always rendered when prompt is active, independent of log output */}
             {oauthRunning && promptMessage && (() => {
-              const isDeviceCodeConfirm = promptMessage.includes('click Submit to open the browser')
+              const isDeviceCodeConfirm = /Your verification code is:/i.test(promptMessage)
+              const translatedPrompt = translatePrompt(promptMessage)
               return (
                 <div className="space-y-1.5 rounded-md border border-blue-500/30 bg-blue-500/5 p-2">
-                  <p className="text-xs font-medium whitespace-pre-line">{promptMessage}</p>
+                  <p className="text-xs font-medium whitespace-pre-line">{translatedPrompt}</p>
                   <div className="flex gap-2">
                     {!isDeviceCodeConfirm && (
                       <input
@@ -365,9 +368,9 @@ function AddProviderModal({
                       {isDeviceCodeConfirm ? (
                         <>
                           <Globe className="h-3 w-3" />
-                          Open Browser
+                          {t('auth.openBrowser')}
                         </>
-                      ) : 'Submit'}
+                      ) : t('auth.submit')}
                     </Button>
                   </div>
                 </div>
@@ -375,10 +378,10 @@ function AddProviderModal({
             })()}
 
             {!oauthRunning && oauthExitCode !== null && oauthExitCode !== 0 && (
-              <p className="text-xs text-destructive">OAuth login failed (code {oauthExitCode})</p>
+              <p className="text-xs text-destructive">{t('auth.oauthLoginFailed', { code: oauthExitCode })}</p>
             )}
             {!oauthRunning && oauthExitCode === 0 && (
-              <p className="text-xs text-green-600">Login successful</p>
+              <p className="text-xs text-green-600">{t('auth.loginSuccessful')}</p>
             )}
           </div>
         )}
@@ -393,6 +396,7 @@ function AddProviderModal({
 
 export function ApiAuthSection() {
   const electron = useElectron()
+  const { t } = useTranslation()
   const cachedAuthStatus = useAppStore((s) => s.authStatus)
   const setCachedAuthStatus = useAppStore((s) => s.setAuthStatus)
   const [authStatus, setAuthStatus] = useState<ModelsAuthStatus | null>(cachedAuthStatus)
@@ -534,12 +538,12 @@ export function ApiAuthSection() {
     return (
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">API Authentication</CardTitle>
+          <CardTitle className="text-base">{t('auth.title')}</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" />
-            Loading provider status...
+            {t('auth.loading')}
           </div>
         </CardContent>
       </Card>
@@ -586,12 +590,12 @@ export function ApiAuthSection() {
             {isMissing ? (
               <span className="flex items-center gap-1 text-xs text-destructive">
                 <AlertCircle className="h-3.5 w-3.5" />
-                {p.status === 'expired' ? 'expired' : 'missing'}
+                {p.status === 'expired' ? t('auth.statusExpired') : t('auth.statusMissing')}
               </span>
             ) : (
               <span className="flex items-center gap-1 text-xs text-green-600">
                 <CheckCircle2 className="h-3.5 w-3.5" />
-                ok
+                {t('auth.statusOk')}
               </span>
             )}
           </div>
@@ -603,12 +607,12 @@ export function ApiAuthSection() {
             <div className="space-y-2">
               <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
                 <Key className="h-3 w-3" />
-                API Key / Token
+                {t('auth.apiKeyToken')}
               </label>
               <div className="flex gap-2">
                 <input
                   type="password"
-                  placeholder="Paste your API key or token"
+                  placeholder={t('auth.pasteYourApiKey')}
                   className="flex-1 h-8 rounded-md border bg-background px-3 text-sm"
                   value={tokenInputs[p.provider] ?? ''}
                   onChange={(e) =>
@@ -623,7 +627,7 @@ export function ApiAuthSection() {
                   onClick={() => handleSaveToken(p.provider)}
                   disabled={!tokenInputs[p.provider]?.trim() || saving[p.provider]}
                 >
-                  {saving[p.provider] ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Save'}
+                  {saving[p.provider] ? <Loader2 className="h-3 w-3 animate-spin" /> : t('auth.save')}
                 </Button>
               </div>
               {saveErrors[p.provider] && (
@@ -636,7 +640,7 @@ export function ApiAuthSection() {
               <div className="space-y-2">
                 <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
                   <Globe className="h-3 w-3" />
-                  OAuth Login
+                  {t('auth.oauthLogin')}
                 </label>
                 <Button
                   size="sm"
@@ -646,7 +650,7 @@ export function ApiAuthSection() {
                   }}
                 >
                   <Globe className="h-3 w-3" />
-                  Login with browser
+                  {t('auth.loginWithBrowser')}
                 </Button>
               </div>
             )}
@@ -665,7 +669,7 @@ export function ApiAuthSection() {
                 ) : (
                   <Trash2 className="h-3 w-3" />
                 )}
-                Remove
+                {t('auth.remove')}
               </Button>
             </div>
           </div>
@@ -678,12 +682,12 @@ export function ApiAuthSection() {
     <>
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">API Authentication</CardTitle>
+          <CardTitle className="text-base">{t('auth.title')}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           {/* Default Model */}
           <div className="space-y-2">
-            <label className="text-xs font-medium text-muted-foreground">Default Model</label>
+            <label className="text-xs font-medium text-muted-foreground">{t('auth.defaultModel')}</label>
             {authStatus?.defaultModel && (
               <p className="text-sm font-mono">{authStatus.defaultModel}</p>
             )}
@@ -699,7 +703,7 @@ export function ApiAuthSection() {
                 }}
                 disabled={settingModel}
               >
-                <option value="">Select a model...</option>
+                <option value="">{t('auth.selectModel')}</option>
                 {availableModels.map((m) => (
                   <option key={m.key} value={m.key}>
                     {m.name} ({m.key})
@@ -710,7 +714,7 @@ export function ApiAuthSection() {
             <div className="flex gap-2">
               <input
                 type="text"
-                placeholder="Or type model ID, e.g. openai-codex/gpt-5.2-codex"
+                placeholder={t('auth.modelInputPlaceholder')}
                 className="flex-1 h-8 rounded-md border bg-background px-3 text-sm"
                 value={modelInput}
                 onChange={(e) => setModelInput(e.target.value)}
@@ -723,7 +727,7 @@ export function ApiAuthSection() {
                 onClick={handleSetModel}
                 disabled={!modelInput.trim() || settingModel}
               >
-                {settingModel ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Set'}
+                {settingModel ? <Loader2 className="h-3 w-3 animate-spin" /> : t('auth.set')}
               </Button>
             </div>
             {modelError && <p className="text-xs text-destructive">{modelError}</p>}
@@ -734,7 +738,7 @@ export function ApiAuthSection() {
             <div className="space-y-1.5">
               <div className="flex items-center justify-between rounded-md border border-yellow-500/30 bg-yellow-500/5 px-3 py-2">
                 <span className="text-sm text-yellow-600 dark:text-yellow-400">
-                  Credentials updated. Restart gateway to apply changes.
+                  {t('auth.restartBanner')}
                 </span>
                 <Button size="sm" variant="outline" onClick={handleRestart} disabled={restarting}>
                   {restarting ? (
@@ -742,7 +746,7 @@ export function ApiAuthSection() {
                   ) : (
                     <RotateCw className="h-3 w-3" />
                   )}
-                  Restart
+                  {t('auth.restart')}
                 </Button>
               </div>
               {restartError && (
@@ -755,7 +759,7 @@ export function ApiAuthSection() {
           {configuredProviders.length > 0 && (
             <div className="space-y-2">
               <label className="text-xs font-medium text-muted-foreground">
-                Configured Providers
+                {t('auth.configuredProviders')}
               </label>
               {configuredProviders.map(renderProviderRow)}
             </div>
@@ -764,14 +768,14 @@ export function ApiAuthSection() {
           {/* Missing / needs attention */}
           {allMissing.length > 0 && (
             <div className="space-y-2">
-              <label className="text-xs font-medium text-muted-foreground">Needs Attention</label>
+              <label className="text-xs font-medium text-muted-foreground">{t('auth.needsAttention')}</label>
               {allMissing.map(renderProviderRow)}
             </div>
           )}
 
           {configuredProviders.length === 0 && allMissing.length === 0 && (
             <p className="text-sm text-muted-foreground">
-              No model providers configured. Add a provider below.
+              {t('auth.noProviders')}
             </p>
           )}
 
@@ -783,7 +787,7 @@ export function ApiAuthSection() {
             onClick={() => setDialogOpen(true)}
           >
             <Plus className="h-3 w-3" />
-            Add Provider
+            {t('auth.addProvider')}
           </Button>
         </CardContent>
       </Card>

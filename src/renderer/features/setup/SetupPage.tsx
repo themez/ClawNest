@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useElectron } from '@/hooks/useElectron'
 import { useAppStore } from '@/stores/app-store'
+import { useTranslation } from '@/i18n'
 import type { EnvironmentInfo } from '@shared/openclaw-types'
 import { ApiAuthSection } from './ApiAuthSection'
 
@@ -17,33 +18,10 @@ interface EnvItem {
   path?: string
 }
 
-function envToItems(env: EnvironmentInfo | null, checking: boolean): { node: EnvItem; openclaw: EnvItem } {
-  if (!env) {
-    const status = checking ? 'checking' : 'idle'
-    return {
-      node: { label: 'Node.js', status },
-      openclaw: { label: 'OpenClaw', status },
-    }
-  }
-  return {
-    node: {
-      label: 'Node.js',
-      status: env.nodeInstalled ? 'installed' : 'not-installed',
-      version: env.nodeVersion,
-      path: env.nodePath,
-    },
-    openclaw: {
-      label: 'OpenClaw',
-      status: env.openclawInstalled ? 'installed' : 'not-installed',
-      version: env.openclawVersion,
-      path: env.openclawPath,
-    },
-  }
-}
-
 export function SetupPage() {
   const electron = useElectron()
   const navigate = useNavigate()
+  const { t } = useTranslation()
 
   const envInfo = useAppStore((s) => s.envInfo)
   const envChecking = useAppStore((s) => s.envChecking)
@@ -87,6 +65,30 @@ export function SetupPage() {
     }
   }, [installOutput])
 
+  function envToItems(env: EnvironmentInfo | null, checking: boolean): { node: EnvItem; openclaw: EnvItem } {
+    if (!env) {
+      const status = checking ? 'checking' : 'idle'
+      return {
+        node: { label: t('setup.nodejs'), status },
+        openclaw: { label: t('setup.openclaw'), status },
+      }
+    }
+    return {
+      node: {
+        label: t('setup.nodejs'),
+        status: env.nodeInstalled ? 'installed' : 'not-installed',
+        version: env.nodeVersion,
+        path: env.nodePath,
+      },
+      openclaw: {
+        label: t('setup.openclaw'),
+        status: env.openclawInstalled ? 'installed' : 'not-installed',
+        version: env.openclawVersion,
+        path: env.openclawPath,
+      },
+    }
+  }
+
   const { node: nodeStatus, openclaw: openclawStatus } = envToItems(envInfo, envChecking)
   const daemonRunning = envInfo?.gatewayRunning ?? false
   const allReady = nodeStatus.status === 'installed' && openclawStatus.status === 'installed'
@@ -98,7 +100,7 @@ export function SetupPage() {
   const handleInstallOpenclaw = () => {
     setInstalling(true)
     setInstallVisible(true)
-    setInstallOutput(['$ npm install -g openclaw', 'Resolving dependencies, please wait...\n'])
+    setInstallOutput([t('setup.installCmd'), t('setup.installResolving')])
 
     const unsubOutput = electron.onOpenclawInstallOutput((_e, data) => {
       setInstallOutput((prev) => [...prev, data as string])
@@ -108,7 +110,7 @@ export function SetupPage() {
       setInstalling(false)
       setInstallOutput((prev) => [
         ...prev,
-        code === 0 ? '\n--- Install complete ---' : `\n--- Install failed (exit ${code}) ---`,
+        code === 0 ? t('setup.installComplete') : t('setup.installFailed', { code: code as number }),
       ])
       if (code === 0) {
         setTimeout(() => {
@@ -122,7 +124,7 @@ export function SetupPage() {
 
     electron.installOpenclaw().catch(() => {
       setInstalling(false)
-      setInstallOutput((prev) => [...prev, 'Error: Failed to start install process'])
+      setInstallOutput((prev) => [...prev, t('setup.installProcessError')])
       unsubOutput()
       unsubExit()
     })
@@ -131,7 +133,7 @@ export function SetupPage() {
   const handleUninstallOpenclaw = () => {
     setInstalling(true)
     setInstallVisible(true)
-    setInstallOutput(['$ npm uninstall -g openclaw\n'])
+    setInstallOutput([t('setup.uninstallCmd')])
 
     const unsubOutput = electron.onOpenclawInstallOutput((_e, data) => {
       setInstallOutput((prev) => [...prev, data as string])
@@ -141,7 +143,7 @@ export function SetupPage() {
       setInstalling(false)
       setInstallOutput((prev) => [
         ...prev,
-        code === 0 ? '\n--- Uninstall complete ---' : `\n--- Uninstall failed (exit ${code}) ---`,
+        code === 0 ? t('setup.uninstallComplete') : t('setup.uninstallFailed', { code: code as number }),
       ])
       if (code === 0) {
         setTimeout(() => {
@@ -155,7 +157,7 @@ export function SetupPage() {
 
     electron.uninstallOpenclaw().catch(() => {
       setInstalling(false)
-      setInstallOutput((prev) => [...prev, 'Error: Failed to start uninstall process'])
+      setInstallOutput((prev) => [...prev, t('setup.uninstallProcessError')])
       unsubOutput()
       unsubExit()
     })
@@ -169,7 +171,7 @@ export function SetupPage() {
       setEnvInfo({ ...envInfo!, gatewayRunning: true })
       navigate({ to: '/dashboard' })
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Failed to start gateway'
+      const msg = err instanceof Error ? err.message : t('setup.failedToStart')
       setStartError(msg)
     } finally {
       setStartingDaemon(false)
@@ -185,10 +187,10 @@ export function SetupPage() {
       const env = await electron.detectEnv()
       setEnvInfo(env)
       if (env.gatewayRunning) {
-        setStartError('Gateway is still running. It may have been started outside ClawBox.')
+        setStartError(t('setup.gatewayStillRunning'))
       }
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Failed to stop gateway'
+      const msg = err instanceof Error ? err.message : t('setup.failedToStop')
       setStartError(msg)
     } finally {
       setStartingDaemon(false)
@@ -198,28 +200,29 @@ export function SetupPage() {
   return (
     <div className="flex flex-col gap-6 max-w-2xl mx-auto">
       <div>
-        <h1 className="text-2xl font-bold">Setup</h1>
+        <h1 className="text-2xl font-bold">{t('setup.title')}</h1>
         <p className="text-muted-foreground mt-1">
-          Check your environment and install OpenClaw to get started.
+          {t('setup.description')}
         </p>
       </div>
 
       {/* Environment Status */}
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">Environment</CardTitle>
+          <CardTitle className="text-base">{t('setup.environment')}</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
           <StatusRow
             item={nodeStatus}
             onInstall={handleInstallNode}
-            installLabel="Download"
+            installLabel={t('setup.download')}
           />
           <StatusRow
             item={openclawStatus}
             onInstall={handleInstallOpenclaw}
             onUninstall={handleUninstallOpenclaw}
-            installLabel="Install"
+            installLabel={t('setup.install')}
+            uninstallLabel={t('setup.uninstall')}
             installing={installing}
           />
         </CardContent>
@@ -230,14 +233,14 @@ export function SetupPage() {
         <Card>
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-base">Install Log</CardTitle>
+              <CardTitle className="text-base">{t('setup.installLog')}</CardTitle>
               {!installing && (
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => setInstallVisible(false)}
                 >
-                  Close
+                  {t('setup.close')}
                 </Button>
               )}
             </div>
@@ -262,7 +265,7 @@ export function SetupPage() {
       {/* Run Control */}
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">Run OpenClaw</CardTitle>
+          <CardTitle className="text-base">{t('setup.runOpenclaw')}</CardTitle>
         </CardHeader>
         <CardContent>
           {daemonRunning ? (
@@ -278,7 +281,7 @@ export function SetupPage() {
               ) : (
                 <Square className="h-4 w-4" />
               )}
-              Stop OpenClaw
+              {t('setup.stopOpenclaw')}
             </Button>
           ) : (
             <Button
@@ -292,17 +295,17 @@ export function SetupPage() {
               ) : (
                 <Play className="h-4 w-4" />
               )}
-              Run OpenClaw
+              {t('setup.runOpenclaw')}
             </Button>
           )}
           {!allReady && !daemonRunning && (
             <p className="text-xs text-muted-foreground mt-2 text-center">
-              Install Node.js and OpenClaw first to enable this button.
+              {t('setup.notReady')}
             </p>
           )}
           {startingDaemon && (
             <p className="text-xs text-muted-foreground mt-2 text-center">
-              {daemonRunning ? 'Stopping...' : 'Starting gateway, this may take up to 20 seconds...'}
+              {daemonRunning ? t('setup.stopping') : t('setup.starting')}
             </p>
           )}
           {startError && (
@@ -324,13 +327,15 @@ function StatusRow({
   item,
   onInstall,
   onUninstall,
-  installLabel = 'Install',
+  installLabel,
+  uninstallLabel,
   installing = false,
 }: {
   item: EnvItem
   onInstall: () => void
   onUninstall?: () => void
-  installLabel?: string
+  installLabel: string
+  uninstallLabel?: string
   installing?: boolean
 }) {
   return (
@@ -361,7 +366,7 @@ function StatusRow({
         {item.status === 'installed' && onUninstall && (
           <Button size="sm" variant="ghost" onClick={onUninstall} disabled={installing} className="text-destructive hover:text-destructive">
             <Trash2 className="h-3.5 w-3.5" />
-            Uninstall
+            {uninstallLabel}
           </Button>
         )}
       </div>
@@ -370,15 +375,16 @@ function StatusRow({
 }
 
 function InstallingIndicator() {
+  const { t } = useTranslation()
   const [elapsed, setElapsed] = useState(0)
   useEffect(() => {
-    const t = setInterval(() => setElapsed((s) => s + 1), 1000)
-    return () => clearInterval(t)
+    const timer = setInterval(() => setElapsed((s) => s + 1), 1000)
+    return () => clearInterval(timer)
   }, [])
   return (
     <span className="inline-flex items-center gap-2 text-muted-foreground">
       <Loader2 className="h-3 w-3 animate-spin" />
-      <span>Installing... {elapsed}s</span>
+      <span>{t('setup.installing', { seconds: elapsed })}</span>
     </span>
   )
 }

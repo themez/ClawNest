@@ -138,7 +138,7 @@ const DialogClose = React.forwardRef<HTMLButtonElement, DialogCloseProps>(
         {...props}
       >
         <X className="h-4 w-4" />
-        <span className="sr-only">Close</span>
+        <span className="sr-only">{props['aria-label'] ?? 'Close'}</span>
       </button>
     )
   },

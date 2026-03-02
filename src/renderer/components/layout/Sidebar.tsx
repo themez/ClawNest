@@ -6,10 +6,12 @@ import {
   ChevronRight,
 } from 'lucide-react'
 import { useAppStore } from '@/stores/app-store'
+import { useTranslation } from '@/i18n'
+import type { TranslationKey } from '@/i18n'
 
 const NAV_ITEMS = [
-  { path: '/' as const, label: 'Setup', icon: Wand2 },
-  { path: '/dashboard' as const, label: 'Dashboard', icon: LayoutDashboard },
+  { path: '/' as const, labelKey: 'sidebar.setup' as TranslationKey, icon: Wand2 },
+  { path: '/dashboard' as const, labelKey: 'sidebar.dashboard' as TranslationKey, icon: LayoutDashboard },
 ]
 
 export function Sidebar() {
@@ -17,6 +19,12 @@ export function Sidebar() {
   const collapsed = useAppStore((s) => s.sidebarCollapsed)
   const toggleSidebar = useAppStore((s) => s.toggleSidebar)
   const gatewayConnected = useAppStore((s) => s.gatewayConnected)
+  const setLanguage = useAppStore((s) => s.setLanguage)
+  const { t, language } = useTranslation()
+
+  const toggleLanguage = () => {
+    setLanguage(language === 'en' ? 'zh' : 'en')
+  }
 
   return (
     <nav
@@ -39,13 +47,13 @@ export function Sidebar() {
               }`}
             >
               <Icon className="h-4 w-4 shrink-0" />
-              {!collapsed && <span>{item.label}</span>}
+              {!collapsed && <span>{t(item.labelKey)}</span>}
             </Link>
           )
         })}
       </div>
 
-      {/* Gateway status + collapse toggle */}
+      {/* Gateway status + language toggle + collapse toggle */}
       <div className="border-t border-border p-2">
         <div className="flex items-center gap-2 px-3 py-1.5">
           <div
@@ -57,10 +65,18 @@ export function Sidebar() {
           />
           {!collapsed && (
             <span className="text-xs text-muted-foreground">
-              {gatewayConnected ? 'Connected' : 'Disconnected'}
+              {gatewayConnected ? t('sidebar.connected') : t('sidebar.disconnected')}
             </span>
           )}
         </div>
+        <button
+          onClick={toggleLanguage}
+          className="flex w-full items-center justify-center rounded-lg py-1.5 text-xs text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+        >
+          {collapsed
+            ? (language === 'en' ? 'EN' : '中')
+            : (language === 'en' ? 'EN | 中文' : '中文 | EN')}
+        </button>
         <button
           onClick={toggleSidebar}
           className="flex w-full items-center justify-center rounded-lg py-1.5 text-muted-foreground hover:bg-accent/50 hover:text-foreground"
