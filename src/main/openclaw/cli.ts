@@ -75,7 +75,11 @@ export class OpenClawCli {
     timeoutMs = 30_000,
   ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
     return new Promise((resolve, reject) => {
-      const child = spawn('openclaw', args, { stdio: 'pipe', timeout: timeoutMs })
+      const child = spawn('openclaw', args, {
+        stdio: 'pipe',
+        timeout: timeoutMs,
+        shell: process.platform === 'win32',
+      })
       let stdout = ''
       let stderr = ''
 
@@ -111,7 +115,10 @@ export class OpenClawCli {
    * that emits 'data' and 'exit' events.
    */
   stream(args: string[]): StreamHandle {
-    const child = spawn('openclaw', args, { stdio: 'pipe' })
+    const child = spawn('openclaw', args, {
+      stdio: 'pipe',
+      shell: process.platform === 'win32',
+    })
     return new StreamHandle(child)
   }
 

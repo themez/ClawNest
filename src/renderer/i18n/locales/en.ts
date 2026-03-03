@@ -215,6 +215,16 @@ export const en = {
   'channels.feishu.domain': 'Domain',
   'channels.feishu.domainHelp': 'Choose Feishu for China or Lark for international.',
 
+  // Updater
+  'updater.available': 'New version {version} available',
+  'updater.downloading': 'Downloading update... {percent}%',
+  'updater.ready': 'Update {version} ready to install',
+  'updater.install': 'Restart & Update',
+  'updater.later': 'Later',
+  'updater.checkForUpdate': 'Check for Updates',
+  'updater.upToDate': 'Already up to date',
+  'updater.error': 'Update check failed',
+
   // Health Card — Channel Details
   'health.channelLinked': 'linked',
   'health.channelConfigured': 'configured',

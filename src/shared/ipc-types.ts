@@ -34,6 +34,9 @@ export const IPC_CHANNELS = {
   OPENCLAW_CHANNELS_SAVE: 'openclaw:channels-save',
   OPENCLAW_CHANNELS_DELETE: 'openclaw:channels-delete',
   OPENCLAW_CHANNELS_PAIR: 'openclaw:channels-pair',
+  // Updater
+  UPDATER_CHECK: 'updater:check',
+  UPDATER_INSTALL: 'updater:install',
   // Gateway
   GATEWAY_CONNECT: 'gateway:connect',
   GATEWAY_DISCONNECT: 'gateway:disconnect',
@@ -57,6 +60,13 @@ export const IPC_EVENTS = {
   OPENCLAW_AUTH_LOGIN_OUTPUT: 'openclaw:auth-login-output',
   OPENCLAW_AUTH_LOGIN_EXIT: 'openclaw:auth-login-exit',
   OPENCLAW_AUTH_LOGIN_PROMPT: 'openclaw:auth-login-prompt',
+  // Updater
+  UPDATER_ERROR: 'updater:error',
+  UPDATER_CHECKING: 'updater:checking',
+  UPDATER_AVAILABLE: 'updater:available',
+  UPDATER_NOT_AVAILABLE: 'updater:not-available',
+  UPDATER_DOWNLOAD_PROGRESS: 'updater:download-progress',
+  UPDATER_DOWNLOADED: 'updater:downloaded',
 } as const
 
 export type IpcEvent = (typeof IPC_EVENTS)[keyof typeof IPC_EVENTS]

@@ -51,6 +51,10 @@ export interface ElectronIPC {
   gatewayRpcCall: (method: string, params?: unknown) => Promise<unknown>
   getGatewayAuthToken: () => Promise<string | null>
 
+  // Updater
+  checkForUpdate: () => Promise<unknown>
+  installUpdate: () => Promise<void>
+
   // Event listeners (return unsubscribe function)
   onSystemThemeChange: (callback: (event: unknown, theme: string) => void) => () => void
   onWindowMaximizedChanged: (callback: (event: unknown, isMaximized: boolean) => void) => () => void
@@ -63,6 +67,13 @@ export interface ElectronIPC {
   onAuthLoginExit: (callback: (event: unknown, code: number) => void) => () => void
   onAuthLoginPrompt: (callback: (event: unknown, message: string, placeholder?: string) => void) => () => void
   replyAuthPrompt: (value: string) => Promise<void>
+
+  // Updater events
+  onUpdaterError: (callback: (event: unknown, message: string) => void) => () => void
+  onUpdaterAvailable: (callback: (event: unknown, version: string) => void) => () => void
+  onUpdaterNotAvailable: (callback: (event: unknown) => void) => () => void
+  onUpdaterDownloadProgress: (callback: (event: unknown, progress: { percent: number; bytesPerSecond: number; transferred: number; total: number }) => void) => () => void
+  onUpdaterDownloaded: (callback: (event: unknown, version: string) => void) => () => void
 }
 
 declare global {

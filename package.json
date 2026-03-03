@@ -20,6 +20,7 @@
     "@mariozechner/pi-ai": "^0.55.3",
     "@tanstack/react-router": "^1.163.2",
     "electron-store": "^11.0.2",
+    "electron-updater": "^6.8.3",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "ws": "^8.19.0",

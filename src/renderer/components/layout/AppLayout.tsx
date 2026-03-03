@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { Outlet } from '@tanstack/react-router'
 import { Titlebar } from '@/components/titlebar/Titlebar'
+import { UpdateBanner } from '@/components/UpdateBanner'
 import { useAppStore } from '@/stores/app-store'
 import { Sidebar } from './Sidebar'
 
@@ -24,6 +25,7 @@ export function AppLayout() {
   return (
     <div className="flex h-screen flex-col">
       <Titlebar />
+      <UpdateBanner />
       <div className="flex flex-1 overflow-hidden">
         <Sidebar />
         <main className="flex-1 overflow-y-auto p-6">

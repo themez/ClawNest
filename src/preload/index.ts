@@ -59,6 +59,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke(IPC_CHANNELS.GATEWAY_RPC_CALL, method, params),
   getGatewayAuthToken: () => ipcRenderer.invoke(IPC_CHANNELS.GATEWAY_AUTH_TOKEN),
 
+  // ─── Updater ───────────────────────────────────────────────────────────────
+  checkForUpdate: () => ipcRenderer.invoke(IPC_CHANNELS.UPDATER_CHECK),
+  installUpdate: () => ipcRenderer.invoke(IPC_CHANNELS.UPDATER_INSTALL),
+
   // ─── Event Listeners ────────────────────────────────────────────────────
   onSystemThemeChange: (callback: (...args: unknown[]) => void) => {
     ipcRenderer.on(IPC_EVENTS.SYSTEM_THEME_CHANGED, callback)
@@ -102,4 +106,26 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   replyAuthPrompt: (value: string) =>
     ipcRenderer.invoke(IPC_CHANNELS.OPENCLAW_AUTH_PROMPT_REPLY, value),
+
+  // ─── Updater Events ──────────────────────────────────────────────────────
+  onUpdaterError: (callback: (...args: unknown[]) => void) => {
+    ipcRenderer.on(IPC_EVENTS.UPDATER_ERROR, callback)
+    return () => ipcRenderer.off(IPC_EVENTS.UPDATER_ERROR, callback)
+  },
+  onUpdaterAvailable: (callback: (...args: unknown[]) => void) => {
+    ipcRenderer.on(IPC_EVENTS.UPDATER_AVAILABLE, callback)
+    return () => ipcRenderer.off(IPC_EVENTS.UPDATER_AVAILABLE, callback)
+  },
+  onUpdaterNotAvailable: (callback: (...args: unknown[]) => void) => {
+    ipcRenderer.on(IPC_EVENTS.UPDATER_NOT_AVAILABLE, callback)
+    return () => ipcRenderer.off(IPC_EVENTS.UPDATER_NOT_AVAILABLE, callback)
+  },
+  onUpdaterDownloadProgress: (callback: (...args: unknown[]) => void) => {
+    ipcRenderer.on(IPC_EVENTS.UPDATER_DOWNLOAD_PROGRESS, callback)
+    return () => ipcRenderer.off(IPC_EVENTS.UPDATER_DOWNLOAD_PROGRESS, callback)
+  },
+  onUpdaterDownloaded: (callback: (...args: unknown[]) => void) => {
+    ipcRenderer.on(IPC_EVENTS.UPDATER_DOWNLOADED, callback)
+    return () => ipcRenderer.off(IPC_EVENTS.UPDATER_DOWNLOADED, callback)
+  },
 })

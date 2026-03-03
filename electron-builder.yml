@@ -14,6 +14,7 @@ asarUnpack:
   - "**/*.node"
 
 mac:
+  icon: assets/icon.icns
   category: public.app-category.developer-tools
   target:
     - target: dmg
@@ -22,6 +23,7 @@ mac:
         - x64
 
 win:
+  icon: assets/icon.ico
   target:
     - target: nsis
       arch:
@@ -32,6 +34,5 @@ nsis:
   allowToChangeInstallationDirectory: true
 
 publish:
-  provider: github
-  owner: "<owner>"
-  repo: clawnest
+  provider: generic
+  url: https://clawnest-releases.xianz.me

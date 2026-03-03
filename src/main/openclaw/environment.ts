@@ -9,7 +9,11 @@ function runQuick(
   timeoutMs = 10_000,
 ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
   return new Promise((resolve) => {
-    const child = spawn(cmd, args, { stdio: 'pipe', timeout: timeoutMs })
+    const child = spawn(cmd, args, {
+      stdio: 'pipe',
+      timeout: timeoutMs,
+      shell: process.platform === 'win32',
+    })
     let stdout = ''
     let stderr = ''
 

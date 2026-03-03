@@ -217,6 +217,16 @@ export const zh: Translations = {
   'channels.feishu.domain': '域名',
   'channels.feishu.domainHelp': '国内用户选飞书，海外用户选 Lark。',
 
+  // Updater
+  'updater.available': '新版本 {version} 可用',
+  'updater.downloading': '正在下载更新... {percent}%',
+  'updater.ready': '更新 {version} 已下载完成',
+  'updater.install': '重启并更新',
+  'updater.later': '稍后',
+  'updater.checkForUpdate': '检查更新',
+  'updater.upToDate': '已是最新版本',
+  'updater.error': '检查更新失败',
+
   // Health Card — Channel Details
   'health.channelLinked': '已连接',
   'health.channelConfigured': '已配置',

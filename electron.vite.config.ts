@@ -6,7 +6,7 @@ import { resolve } from 'node:path'
 
 export default defineConfig({
   main: {
-    plugins: [externalizeDepsPlugin({ exclude: ['electron-store'] })],
+    plugins: [externalizeDepsPlugin({ exclude: ['electron-store', 'electron-updater'] })],
     build: {
       lib: {
         entry: resolve(__dirname, 'src/main/main.ts'),

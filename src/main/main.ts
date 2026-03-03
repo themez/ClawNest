@@ -1,3 +1,6 @@
+import { fixPath } from './fix-path'
+fixPath()
+
 import { app, BrowserWindow, ipcMain, nativeTheme, shell } from 'electron'
 import { join } from 'node:path'
 import { execFile, spawn, type ChildProcess } from 'node:child_process'
@@ -15,6 +18,7 @@ import { getWindowState, saveWindowState } from './window-state'
 import { performOAuthLogin, isOAuthSupported, getOAuthProviderIds } from './openclaw/openai-codex-oauth'
 import { upsertAuthProfile, applyAuthProfileToConfig, deleteAuthForProvider, saveProviderApiKey, getProviderEndpoints } from './openclaw/auth-store'
 import { getConfiguredChannels, saveChannelConfig, deleteChannelConfig } from './openclaw/channel-store'
+import { setupUpdater } from './updater'
 
 let mainWindow: BrowserWindow | null = null
 let gatewayConnectInFlight: Promise<void> | null = null
@@ -197,6 +201,7 @@ function createWindow() {
     y: windowState.y,
     minWidth: 800,
     minHeight: 600,
+    icon: join(__dirname, '../../assets/icon.png'),
     show: false,
     titleBarStyle: isMac ? 'hiddenInset' : 'default',
     frame: isMac ? true : false,
@@ -272,9 +277,11 @@ function registerIpcHandlers() {
 
   ipcMain.handle(IPC_CHANNELS.OPENCLAW_INSTALL, (event) => {
     // Use npm to install openclaw globally — not the openclaw CLI itself
-    const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm'
+    const isWin = process.platform === 'win32'
+    const npm = isWin ? 'npm.cmd' : 'npm'
     const child = spawn(npm, ['install', '-g', 'openclaw'], {
       stdio: ['ignore', 'pipe', 'pipe'], // close stdin to prevent blocking
+      shell: isWin, // Windows needs shell to execute .cmd batch files
     })
 
     let exited = false
@@ -306,9 +313,11 @@ function registerIpcHandlers() {
     await stopGateway()
     try { await openclawCli.exec(['gateway', 'uninstall'], 10_000) } catch { /* ignore */ }
 
-    const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm'
+    const isWin = process.platform === 'win32'
+    const npmCmd = isWin ? 'npm.cmd' : 'npm'
     const child = spawn(npmCmd, ['uninstall', '-g', 'openclaw'], {
       stdio: ['ignore', 'pipe', 'pipe'],
+      shell: isWin, // Windows needs shell to execute .cmd batch files
     })
 
     let exited = false
@@ -644,6 +653,7 @@ function registerThemeHandler() {
 app.whenReady().then(() => {
   registerIpcHandlers()
   registerThemeHandler()
+  setupUpdater(() => mainWindow)
   createWindow()
 
   app.on('activate', () => {
