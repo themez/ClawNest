@@ -298,12 +298,25 @@ export async function performOAuthLogin(
     throwIfAborted(params.signal)
     let creds: { access: string; refresh: string; expires: number; [k: string]: unknown }
 
+    // Race any promise against the abort signal so pi-ai calls (which
+    // don't accept AbortSignal) can still be cancelled by the user.
+    const raceAbort = <T>(p: Promise<T>): Promise<T> => {
+      if (!params.signal) return p
+      return Promise.race([
+        p,
+        new Promise<never>((_resolve, reject) => {
+          if (params.signal!.aborted) reject(new DOMException('Aborted', 'AbortError'))
+          params.signal!.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')), { once: true })
+        }),
+      ])
+    }
+
     switch (provider) {
       /* ── pi-ai providers ─────────────────────────────────────── */
 
       case 'openai-codex': {
         const m = await import('@mariozechner/pi-ai')
-        creds = await m.loginOpenAICodex({
+        creds = await raceAbort(m.loginOpenAICodex({
           onAuth: ({ url }) => {
             params.onProgress('Opening browser for authorization...\n')
             params.openUrl(url)
@@ -314,13 +327,13 @@ export async function performOAuthLogin(
           onProgress: (message) => {
             params.onProgress(message + '\n')
           },
-        })
+        }))
         break
       }
 
       case 'anthropic': {
         const m = await import('@mariozechner/pi-ai')
-        creds = await m.loginAnthropic(
+        creds = await raceAbort(m.loginAnthropic(
           (url: string) => {
             params.onProgress('Opening browser for Anthropic authorization...\n')
             params.openUrl(url)
@@ -331,13 +344,13 @@ export async function performOAuthLogin(
               'code#state',
             )
           },
-        )
+        ))
         break
       }
 
       case 'github-copilot': {
         const m = await import('@mariozechner/pi-ai')
-        creds = await m.loginGitHubCopilot({
+        creds = await raceAbort(m.loginGitHubCopilot({
           onAuth: (url: string, instructions?: string) => {
             // Device-code flow: show code and wait for user confirmation before opening browser
             ;(async () => {
@@ -357,13 +370,13 @@ export async function performOAuthLogin(
           onProgress: (message: string) => {
             params.onProgress(message + '\n')
           },
-        })
+        }))
         break
       }
 
       case 'google-gemini-cli': {
         const m = await import('@mariozechner/pi-ai')
-        creds = await m.loginGeminiCli(
+        creds = await raceAbort(m.loginGeminiCli(
           (info: { url: string; instructions?: string }) => {
             params.onProgress('Opening browser for Google Gemini CLI authorization...\n')
             if (info.instructions) params.onProgress(info.instructions + '\n')
@@ -372,13 +385,13 @@ export async function performOAuthLogin(
           (message: string) => {
             params.onProgress(message + '\n')
           },
-        )
+        ))
         break
       }
 
       case 'antigravity': {
         const m = await import('@mariozechner/pi-ai')
-        creds = await m.loginAntigravity(
+        creds = await raceAbort(m.loginAntigravity(
           (info: { url: string; instructions?: string }) => {
             params.onProgress('Opening browser for Antigravity authorization...\n')
             if (info.instructions) params.onProgress(info.instructions + '\n')
@@ -387,7 +400,7 @@ export async function performOAuthLogin(
           (message: string) => {
             params.onProgress(message + '\n')
           },
-        )
+        ))
         break
       }
 
