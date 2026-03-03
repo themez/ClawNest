@@ -88,6 +88,8 @@ export const en = {
   'auth.loginWithBrowser': 'Login with browser',
   'auth.remove': 'Remove',
   'auth.defaultModel': 'Default Model',
+  'auth.selectModelPrompt': 'The current default model is not available. Please select a model from a configured provider below.',
+  'auth.modelNotAvailable': 'The current default model is not available. Please restart the gateway first, then select a model.',
   'auth.selectModel': 'Select a model...',
   'auth.modelInputPlaceholder': 'Or type model ID, e.g. openai-codex/gpt-5.2-codex',
   'auth.set': 'Set',

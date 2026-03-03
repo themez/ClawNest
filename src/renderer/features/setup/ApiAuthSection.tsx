@@ -394,11 +394,19 @@ function AddProviderModal({
 /*  ApiAuthSection — Main Card                                         */
 /* ================================================================== */
 
-export function ApiAuthSection() {
+export type AuthSectionStatus = 'no-provider' | 'no-model' | 'ok'
+
+interface ApiAuthSectionProps {
+  onStatusChange?: (status: AuthSectionStatus) => void
+}
+
+export function ApiAuthSection({ onStatusChange }: ApiAuthSectionProps) {
   const electron = useElectron()
   const { t } = useTranslation()
   const cachedAuthStatus = useAppStore((s) => s.authStatus)
   const setCachedAuthStatus = useAppStore((s) => s.setAuthStatus)
+  const envInfo = useAppStore((s) => s.envInfo)
+  const setEnvInfo = useAppStore((s) => s.setEnvInfo)
   const [authStatus, setAuthStatus] = useState<ModelsAuthStatus | null>(cachedAuthStatus)
   const [loading, setLoading] = useState(!cachedAuthStatus)
   const [expandedProvider, setExpandedProvider] = useState<string | null>(null)
@@ -435,13 +443,41 @@ export function ApiAuthSection() {
     }
   }, [electron, setCachedAuthStatus])
 
+  const [modelsLoaded, setModelsLoaded] = useState(allModels.length > 0)
+
+  const refreshModelsTracked = useCallback(() => {
+    electron.listModels().then((models) => {
+      setAllModels(models)
+      setModelsLoaded(true)
+    }).catch(() => {
+      setModelsLoaded(true) // mark loaded even on error to avoid stuck state
+    })
+  }, [electron])
+
   useEffect(() => {
     fetchStatus()
-    if (allModels.length === 0) {
-      refreshModels()
+    if (!modelsLoaded) {
+      refreshModelsTracked()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Derived: is the default model usable with a configured provider?
+  const hasConfiguredProvider = (authStatus?.providers ?? []).some((p) => p.status === 'ok')
+  const defaultModelAvailable = authStatus?.defaultModel
+    ? allModels.some((m) => m.available && m.key === authStatus.defaultModel)
+    : false
+  // Only report status after both authStatus and models have loaded
+  const ready = !loading && modelsLoaded
+  const authSectionStatus: AuthSectionStatus = !hasConfiguredProvider
+    ? 'no-provider'
+    : !defaultModelAvailable
+      ? 'no-model'
+      : 'ok'
+
+  useEffect(() => {
+    if (ready) onStatusChange?.(authSectionStatus)
+  }, [authSectionStatus, ready, onStatusChange])
 
   const handleSaveToken = async (provider: string, endpoint?: string) => {
     const token = tokenInputs[provider]?.trim()
@@ -479,6 +515,7 @@ export function ApiAuthSection() {
         setModelInput('')
         setNeedsRestart(true)
         await fetchStatus()
+        refreshModelsTracked()
       } else {
         setModelError(result.error ?? 'Failed to set model')
       }
@@ -494,18 +531,15 @@ export function ApiAuthSection() {
     if (model) setModelTo(model)
   }
 
-  const refreshModels = useCallback(() => {
-    electron.listModels().then(setAllModels).catch(() => {})
-  }, [electron])
-
   const handleRestart = async () => {
     setRestarting(true)
     setRestartError('')
     try {
       await electron.restartGateway()
+      if (envInfo) setEnvInfo({ ...envInfo, gatewayRunning: true })
       setNeedsRestart(false)
       await fetchStatus()
-      refreshModels()
+      refreshModelsTracked()
     } catch (err) {
       setRestartError(err instanceof Error ? err.message : 'Gateway restart failed')
     } finally {
@@ -516,7 +550,8 @@ export function ApiAuthSection() {
   const handleAddProviderSuccess = useCallback(() => {
     setNeedsRestart(true)
     fetchStatus()
-  }, [fetchStatus])
+    refreshModelsTracked()
+  }, [fetchStatus, refreshModelsTracked])
 
   const handleDeleteProvider = async (provider: string) => {
     setDeleting((p) => ({ ...p, [provider]: true }))
@@ -675,8 +710,13 @@ export function ApiAuthSection() {
     <>
       <div className="space-y-3">
           {/* Default Model */}
-          <div className="space-y-2">
+          <div className={`space-y-2 ${authSectionStatus === 'no-model' ? 'rounded-md border border-yellow-500/30 bg-yellow-500/5 p-3' : ''}`}>
             <label className="text-xs font-medium text-muted-foreground">{t('auth.defaultModel')}</label>
+            {authSectionStatus === 'no-model' && (
+              <p className="text-xs text-yellow-600 dark:text-yellow-400">
+                {availableModels.length > 0 ? t('auth.selectModelPrompt') : t('auth.modelNotAvailable')}
+              </p>
+            )}
             {authStatus?.defaultModel && (
               <p className="text-sm font-mono">{authStatus.defaultModel}</p>
             )}

@@ -90,6 +90,8 @@ export const zh: Translations = {
   'auth.loginWithBrowser': '浏览器登录',
   'auth.remove': '移除',
   'auth.defaultModel': '默认模型',
+  'auth.selectModelPrompt': '当前默认模型不可用，请从下方已配置的提供商中选择一个模型。',
+  'auth.modelNotAvailable': '当前默认模型不可用，请先重启网关，然后选择一个模型。',
   'auth.selectModel': '选择模型...',
   'auth.modelInputPlaceholder': '或输入模型 ID，如 openai-codex/gpt-5.2-codex',
   'auth.set': '设置',

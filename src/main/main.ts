@@ -1,6 +1,6 @@
 import { app, BrowserWindow, ipcMain, nativeTheme, shell } from 'electron'
 import { join } from 'node:path'
-import { spawn, type ChildProcess } from 'node:child_process'
+import { execFile, spawn, type ChildProcess } from 'node:child_process'
 import { createConnection } from 'node:net'
 import { readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { homedir } from 'node:os'
@@ -119,9 +119,41 @@ async function startGateway(port: number): Promise<void> {
   console.log('[clawnest] gateway subprocess started and port reachable')
 }
 
-async function stopGateway(): Promise<void> {
+/** Find the PID listening on a given port and kill it. */
+async function killProcessOnPort(port: number): Promise<void> {
+  if (process.platform === 'win32') {
+    // Windows: netstat -ano | findstr :port
+    return new Promise<void>((resolve) => {
+      execFile('cmd', ['/c', `for /f "tokens=5" %a in ('netstat -ano ^| findstr :${port} ^| findstr LISTENING') do taskkill /F /PID %a`],
+        () => resolve())
+    })
+  }
+  // macOS / Linux: lsof to find PID, then kill
+  return new Promise<void>((resolve) => {
+    execFile('lsof', ['-ti', `tcp:${port}`], (err, stdout) => {
+      if (err || !stdout.trim()) { resolve(); return }
+      const pids = [...new Set(stdout.trim().split(/\s+/))]
+      console.log(`[clawnest] killing external gateway process(es): ${pids.join(', ')}`)
+      let remaining = pids.length
+      const done = () => { if (--remaining <= 0) resolve() }
+      for (const pid of pids) {
+        execFile('kill', ['-TERM', pid], () => done())
+      }
+    })
+  })
+}
+
+async function stopGateway(port: number = DEFAULT_GATEWAY_PORT): Promise<void> {
   const child = gatewayProcess
-  if (!child) return // External gateway or not running — nothing to do
+
+  if (!child) {
+    // No managed subprocess — check if an external gateway is running on the port
+    if (await probeGateway(port)) {
+      console.log('[clawnest] stopping external gateway process on port', port)
+      await killProcessOnPort(port)
+    }
+    return
+  }
 
   console.log('[clawnest] stopping gateway subprocess…')
   gatewayProcess = null

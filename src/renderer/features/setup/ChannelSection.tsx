@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { useElectron } from '@/hooks/useElectron'
+import { useAppStore } from '@/stores/app-store'
 import { useTranslation } from '@/i18n'
 import { getChannelMeta } from '@shared/channel-meta'
 import type { ConfiguredChannelInfo, HealthSummary, ChannelHealthSummary } from '@shared/openclaw-types'
@@ -16,9 +17,14 @@ import {
 } from 'lucide-react'
 import { AddChannelModal } from './AddChannelModal'
 
-/** Channel is "linked" when the probe succeeded (bot reachable) or gateway reports linked */
+/** Channel is "linked" when the gateway explicitly reports linked status (pairing completed) */
 function isChannelLinked(ch?: ChannelHealthSummary): boolean {
-  return ch?.linked === true || ch?.probe?.ok === true
+  return ch?.linked === true
+}
+
+/** Channel probe succeeded — bot is reachable on the platform (does NOT imply pairing) */
+function isProbeOk(ch?: ChannelHealthSummary): boolean {
+  return ch?.probe?.ok === true
 }
 
 interface ChannelSectionProps {
@@ -41,7 +47,9 @@ export function ChannelSection({ onStatusChange }: ChannelSectionProps) {
   const [pairCode, setPairCode] = useState<Record<string, string>>({})
   const [pairing, setPairing] = useState<Record<string, boolean>>({})
   const [pairError, setPairError] = useState<Record<string, string>>({})
-  const [paired, setPaired] = useState<Record<string, boolean>>({})
+  const paired = useAppStore((s) => s.pairedChannels)
+  const markChannelPaired = useAppStore((s) => s.markChannelPaired)
+  const unmarkChannelPaired = useAppStore((s) => s.unmarkChannelPaired)
 
   const fetchChannels = useCallback(async () => {
     try {
@@ -118,7 +126,7 @@ export function ChannelSection({ onStatusChange }: ChannelSectionProps) {
     try {
       const result = await electron.pairChannel(channelId, code)
       if (result.success) {
-        setPaired((p) => ({ ...p, [channelKey]: true }))
+        markChannelPaired(channelKey)
         // Re-fetch health after a short delay to pick up updated linked status
         setTimeout(refreshHealth, 1500)
       } else {
@@ -139,6 +147,7 @@ export function ChannelSection({ onStatusChange }: ChannelSectionProps) {
       if (result.success) {
         setExpandedChannel(null)
         setNeedsRestart(true)
+        unmarkChannelPaired(key)
         await fetchChannels()
       }
     } catch {
@@ -153,6 +162,8 @@ export function ChannelSection({ onStatusChange }: ChannelSectionProps) {
     setRestartError('')
     try {
       await electron.restartGateway()
+      const envInfo = useAppStore.getState().envInfo
+      if (envInfo) useAppStore.getState().setEnvInfo({ ...envInfo, gatewayRunning: true })
       setNeedsRestart(false)
     } catch (err) {
       setRestartError(err instanceof Error ? err.message : 'Gateway restart failed')

@@ -21,6 +21,11 @@ interface AppStore {
   setupSectionsOpen: Record<number, boolean>
   setSetupSectionOpen: (step: number, open: boolean) => void
 
+  // Locally tracked paired channels (persisted across renders, source of truth for pairing)
+  pairedChannels: Record<string, boolean>
+  markChannelPaired: (key: string) => void
+  unmarkChannelPaired: (key: string) => void
+
   setTheme: (theme: 'light' | 'dark' | 'system') => void
   setLanguage: (lang: string) => void
   toggleSidebar: () => void
@@ -44,6 +49,15 @@ export const useAppStore = create<AppStore>((set) => ({
   setupSectionsOpen: {},
   setSetupSectionOpen: (step, open) =>
     set((s) => ({ setupSectionsOpen: { ...s.setupSectionsOpen, [step]: open } })),
+
+  pairedChannels: {},
+  markChannelPaired: (key) =>
+    set((s) => ({ pairedChannels: { ...s.pairedChannels, [key]: true } })),
+  unmarkChannelPaired: (key) =>
+    set((s) => {
+      const { [key]: _, ...rest } = s.pairedChannels
+      return { pairedChannels: rest }
+    }),
 
   setTheme: (theme) => set({ theme }),
   setLanguage: (language) => {

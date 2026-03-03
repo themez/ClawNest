@@ -19,6 +19,7 @@ import { useAppStore } from '@/stores/app-store'
 import { useTranslation } from '@/i18n'
 import type { EnvironmentInfo, ModelsAuthStatus } from '@shared/openclaw-types'
 import { ApiAuthSection } from './ApiAuthSection'
+import type { AuthSectionStatus } from './ApiAuthSection'
 import { ChannelSection } from './ChannelSection'
 
 type DetectStatus = 'idle' | 'checking' | 'installed' | 'not-installed'
@@ -54,13 +55,18 @@ function CollapsibleSection({
   const open = storedOpen ?? defaultOpen
   const setOpen = (v: boolean) => setStoredOpen(step, v)
 
-  // Auto-collapse when status transitions to 'complete'
-  const prevStatusRef = useRef(status)
+  // Auto-collapse only once: when status first becomes 'complete' on initial load
+  // After that, user controls the section manually
+  const initialCollapseRef = useRef(false)
   useEffect(() => {
-    if (prevStatusRef.current !== 'complete' && status === 'complete') {
+    if (initialCollapseRef.current) return
+    if (status === 'complete') {
+      initialCollapseRef.current = true
       setOpen(false)
+    } else if (status !== 'pending' && status !== 'optional') {
+      // Status has been determined (not default) — stop watching
+      initialCollapseRef.current = true
     }
-    prevStatusRef.current = status
   }, [status])
 
   const statusIcon = () => {
@@ -124,6 +130,7 @@ export function SetupPage() {
   const [startingDaemon, setStartingDaemon] = useState(false)
   const [startError, setStartError] = useState<string | null>(null)
   const [hasChannels, setHasChannels] = useState(false)
+  const [authSecStatus, setAuthSecStatus] = useState<AuthSectionStatus>('no-provider')
   const logRef = useRef<HTMLDivElement>(null)
 
   const detectEnv = useCallback(async () => {
@@ -190,10 +197,11 @@ export function SetupPage() {
       ? 'complete'
       : 'pending'
 
-  const providerStatus: SectionStatus = (() => {
-    const providers = cachedAuthStatus?.providers ?? []
-    return providers.some((p) => p.status === 'ok') ? 'complete' : 'pending'
-  })()
+  const providerStatus: SectionStatus = authSecStatus === 'ok'
+    ? 'complete'
+    : authSecStatus === 'no-model'
+      ? 'warning'
+      : 'pending'
 
   const channelStatus: SectionStatus = hasChannels ? 'complete' : 'optional'
 
@@ -367,7 +375,7 @@ export function SetupPage() {
         status={providerStatus}
       >
         {openclawStatus.status === 'installed' ? (
-          <ApiAuthSection />
+          <ApiAuthSection onStatusChange={setAuthSecStatus} />
         ) : (
           <p className="text-sm text-muted-foreground">{t('channels.installFirst')}</p>
         )}

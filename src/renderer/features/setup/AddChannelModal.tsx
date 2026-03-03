@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useAppStore } from '@/stores/app-store'
 import {
   Dialog,
   DialogContent,
@@ -31,6 +32,7 @@ export function AddChannelModal({
 }: AddChannelModalProps) {
   const electron = useElectron()
   const { t } = useTranslation()
+  const markChannelPaired = useAppStore((s) => s.markChannelPaired)
 
   const [step, setStep] = useState<Step>('select')
   const [selectedChannel, setSelectedChannel] = useState<ChannelMeta | null>(null)
@@ -135,6 +137,8 @@ export function AddChannelModal({
       const result = await electron.pairChannel(selectedChannel.id, pairCode)
       if (result.success) {
         setPaired(true)
+        const key = `${selectedChannel.id}:${accountId.trim() || 'default'}`
+        markChannelPaired(key)
       } else {
         setPairError(result.error ?? 'Pairing failed')
       }
@@ -370,6 +374,8 @@ export function AddChannelModal({
                     setRestartError('')
                     try {
                       await electron.restartGateway()
+                      const envInfo = useAppStore.getState().envInfo
+                      if (envInfo) useAppStore.getState().setEnvInfo({ ...envInfo, gatewayRunning: true })
                       setRestarted(true)
                     } catch (err) {
                       setRestartError(err instanceof Error ? err.message : 'Restart failed')
