@@ -1,9 +1,9 @@
 import { fixPath } from './fix-path'
 fixPath()
 
-import { app, BrowserWindow, ipcMain, nativeTheme, shell } from 'electron'
+import { app, BrowserWindow, ipcMain, nativeTheme, net, shell } from 'electron'
 import { join } from 'node:path'
-import { execFile, spawn, type ChildProcess } from 'node:child_process'
+import { execFile, execSync, spawn, type ChildProcess } from 'node:child_process'
 import { createConnection } from 'node:net'
 import { readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { homedir } from 'node:os'
@@ -90,6 +90,7 @@ async function startGateway(port: number): Promise<void> {
   const child = spawn('openclaw', ['gateway', '--port', String(port)], {
     stdio: ['ignore', 'pipe', 'pipe'],
     detached: false,
+    shell: process.platform === 'win32',
   })
 
   gatewayProcess = child
@@ -243,6 +244,32 @@ function createWindow() {
 }
 
 // ---------------------------------------------------------------------------
+// npm registry detection — fall back to Chinese mirror when default is slow
+// ---------------------------------------------------------------------------
+
+const NPM_REGISTRY_PROBE_TIMEOUT = 5_000 // 5 seconds
+
+/**
+ * Probe the default npm registry. If it responds within the timeout, use it.
+ * Otherwise, fall back to the given mirror and return the `--registry` arg.
+ */
+async function detectNpmRegistry(
+  mirror: string,
+  log: (msg: string) => void,
+): Promise<string[]> {
+  try {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), NPM_REGISTRY_PROBE_TIMEOUT)
+    await net.fetch('https://registry.npmjs.org/-/ping', { signal: controller.signal })
+    clearTimeout(timer)
+    return [] // default registry is reachable
+  } catch {
+    log(`npm registry is slow or unreachable, switching to mirror: ${mirror}\n`)
+    return ['--registry', mirror]
+  }
+}
+
+// ---------------------------------------------------------------------------
 // IPC Handlers
 // ---------------------------------------------------------------------------
 
@@ -275,14 +302,9 @@ function registerIpcHandlers() {
   // ─── OpenClaw ─────────────────────────────────────────────────────────
   ipcMain.handle(IPC_CHANNELS.OPENCLAW_DETECT_ENV, () => detectAll())
 
-  ipcMain.handle(IPC_CHANNELS.OPENCLAW_INSTALL, (event) => {
-    // Use npm to install openclaw globally — not the openclaw CLI itself
+  ipcMain.handle(IPC_CHANNELS.OPENCLAW_INSTALL, async (event) => {
     const isWin = process.platform === 'win32'
     const npm = isWin ? 'npm.cmd' : 'npm'
-    const child = spawn(npm, ['install', '-g', 'openclaw'], {
-      stdio: ['ignore', 'pipe', 'pipe'], // close stdin to prevent blocking
-      shell: isWin, // Windows needs shell to execute .cmd batch files
-    })
 
     let exited = false
     const sendOutput = (data: string) => {
@@ -297,6 +319,15 @@ function registerIpcHandlers() {
         event.sender.send(IPC_EVENTS.OPENCLAW_INSTALL_EXIT, code)
       }
     }
+
+    // Probe the default npm registry; fall back to Chinese mirror if slow/unreachable
+    const CHINA_MIRROR = 'https://registry.npmmirror.com'
+    const registryArgs = await detectNpmRegistry(CHINA_MIRROR, sendOutput)
+
+    const child = spawn(npm, ['install', '-g', 'openclaw', ...registryArgs], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      shell: isWin,
+    })
 
     child.stdout!.on('data', (d: Buffer) => sendOutput(d.toString()))
     child.stderr!.on('data', (d: Buffer) => sendOutput(d.toString()))
@@ -351,7 +382,7 @@ function registerIpcHandlers() {
     try {
       const result = await openclawCli.exec(['models', 'status', '--json'])
       if (result.exitCode !== 0) {
-        return { defaultModel: null, missingProvidersInUse: [], providersWithOAuth: [], providers: [] }
+        return { defaultModel: null, missingProvidersInUse: [], providersWithOAuth: getOAuthProviderIds(), providers: [] }
       }
       const data = JSON.parse(result.stdout)
       const auth = data?.auth ?? {}
@@ -373,7 +404,7 @@ function registerIpcHandlers() {
         providers,
       }
     } catch {
-      return { defaultModel: null, missingProvidersInUse: [], providersWithOAuth: [], providers: [] }
+      return { defaultModel: null, missingProvidersInUse: [], providersWithOAuth: getOAuthProviderIds(), providers: [] }
     }
   })
 
@@ -673,7 +704,14 @@ app.on('will-quit', () => {
   gatewayClient.disconnect()
   // Stop gateway subprocess if we spawned it (external gateways are left alone)
   if (gatewayProcess) {
+    const pid = gatewayProcess.pid
     try { gatewayProcess.kill('SIGTERM') } catch { /* ignore */ }
+    // On Windows, SIGTERM may not propagate to the child tree — force-kill
+    if (process.platform === 'win32' && pid) {
+      try {
+        execSync(`taskkill /PID ${pid} /T /F`, { stdio: 'ignore', timeout: 5000 })
+      } catch { /* ignore — process may already be gone */ }
+    }
     gatewayProcess = null
   }
 })

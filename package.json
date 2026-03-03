@@ -17,6 +17,7 @@
     "package:all": "electron-vite build && electron-builder --mac --win"
   },
   "dependencies": {
+    "@aws/lambda-invoke-store": "0.2.3",
     "@mariozechner/pi-ai": "^0.55.3",
     "@tanstack/react-router": "^1.163.2",
     "electron-store": "^11.0.2",
