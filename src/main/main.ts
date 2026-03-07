@@ -302,6 +302,192 @@ function registerIpcHandlers() {
   // ─── OpenClaw ─────────────────────────────────────────────────────────
   ipcMain.handle(IPC_CHANNELS.OPENCLAW_DETECT_ENV, () => detectAll())
 
+  ipcMain.handle(IPC_CHANNELS.OPENCLAW_INSTALL_NODE, async (event) => {
+    let exited = false
+    const sendOutput = (data: string) => {
+      if (!event.sender.isDestroyed()) {
+        event.sender.send(IPC_EVENTS.OPENCLAW_INSTALL_OUTPUT, data)
+      }
+    }
+    const sendExit = (code: number) => {
+      if (exited) return
+      exited = true
+      if (!event.sender.isDestroyed()) {
+        event.sender.send(IPC_EVENTS.OPENCLAW_INSTALL_EXIT, code)
+      }
+    }
+
+    const isMac = process.platform === 'darwin'
+    const isWin = process.platform === 'win32'
+
+    // Refresh process.env.PATH so detectEnv() can find the newly installed node
+    const refreshPath = () => {
+      try {
+        if (isWin) {
+          // On Windows, read the latest PATH from registry via a fresh shell
+          const freshPath = execSync('cmd /c echo %PATH%', { timeout: 5000 }).toString().trim()
+          if (freshPath) process.env.PATH = freshPath
+        } else {
+          // On macOS/Linux, read PATH from a login shell
+          const freshPath = execSync('/bin/bash -lc "echo \\$PATH"', { timeout: 5000 }).toString().trim()
+          if (freshPath) process.env.PATH = freshPath
+        }
+      } catch {
+        // Ignore — worst case detectEnv uses stale PATH
+      }
+    }
+
+    const sendExitWithRefresh = (code: number) => {
+      if (code === 0) refreshPath()
+      sendExit(code)
+    }
+
+    if (isMac) {
+      // Try brew first
+      const brewPath = existsSync('/opt/homebrew/bin/brew')
+        ? '/opt/homebrew/bin/brew'
+        : existsSync('/usr/local/bin/brew')
+          ? '/usr/local/bin/brew'
+          : null
+
+      if (brewPath) {
+        sendOutput('$ brew install node\n')
+        const child = spawn(brewPath, ['install', 'node'], {
+          stdio: ['ignore', 'pipe', 'pipe'],
+        })
+        child.stdout!.on('data', (d: Buffer) => sendOutput(d.toString()))
+        child.stderr!.on('data', (d: Buffer) => sendOutput(d.toString()))
+        child.on('error', (err) => {
+          sendOutput(`Error: ${err.message}\n`)
+          sendExit(1)
+        })
+        child.on('close', (code) => sendExitWithRefresh(code ?? 1))
+      } else {
+        // No brew — download official .pkg installer
+        sendOutput('Homebrew not found, downloading Node.js installer...\n')
+        try {
+          const arch = process.arch === 'arm64' ? 'arm64' : 'x64'
+          const indexRes = await net.fetch('https://nodejs.org/dist/index.json')
+          const releases = (await indexRes.json()) as { version: string; lts: string | false }[]
+          const lts = releases.find((r) => r.lts)
+          if (!lts) {
+            sendOutput('Error: Could not determine latest LTS version.\n')
+            sendExit(1)
+            return
+          }
+          const ver = lts.version
+          const pkgUrl = `https://nodejs.org/dist/${ver}/node-${ver}-darwin-${arch}.tar.gz`
+          sendOutput(`Downloading ${pkgUrl}\n`)
+
+          const res = await net.fetch(pkgUrl)
+          if (!res.ok) {
+            sendOutput(`Error: Download failed (${res.status})\n`)
+            sendExit(1)
+            return
+          }
+          const buffer = Buffer.from(await res.arrayBuffer())
+          const tmpDir = join(app.getPath('temp'), 'clawnest-node-install')
+          const tarPath = join(tmpDir, `node-${ver}.tar.gz`)
+          const { mkdirSync } = await import('node:fs')
+          mkdirSync(tmpDir, { recursive: true })
+          writeFileSync(tarPath, buffer)
+          sendOutput('Download complete. Extracting...\n')
+
+          // Extract to /usr/local (requires no sudo for tar.gz approach)
+          const installDir = join(homedir(), '.clawnest', 'node')
+          mkdirSync(installDir, { recursive: true })
+          const tar = spawn('tar', ['xzf', tarPath, '-C', installDir, '--strip-components=1'], {
+            stdio: ['ignore', 'pipe', 'pipe'],
+          })
+          tar.stdout!.on('data', (d: Buffer) => sendOutput(d.toString()))
+          tar.stderr!.on('data', (d: Buffer) => sendOutput(d.toString()))
+          tar.on('error', (err) => {
+            sendOutput(`Error: ${err.message}\n`)
+            sendExit(1)
+          })
+          tar.on('close', (code) => {
+            if (code === 0) {
+              const nodeBin = join(installDir, 'bin')
+              sendOutput(`Node.js installed to ${nodeBin}\n`)
+              sendOutput('Adding to PATH for this app...\n')
+              process.env.PATH = `${nodeBin}:${process.env.PATH}`
+            }
+            sendExitWithRefresh(code ?? 1)
+          })
+        } catch (err) {
+          sendOutput(`Error: ${err instanceof Error ? err.message : String(err)}\n`)
+          sendExit(1)
+        }
+      }
+    } else if (isWin) {
+      // Try winget first
+      sendOutput('$ winget install OpenJS.NodeJS.LTS --accept-source-agreements --accept-package-agreements\n')
+      const child = spawn(
+        'winget',
+        ['install', 'OpenJS.NodeJS.LTS', '--accept-source-agreements', '--accept-package-agreements'],
+        { stdio: ['ignore', 'pipe', 'pipe'], shell: true },
+      )
+
+      let wingetFailed = false
+      child.on('error', () => {
+        wingetFailed = true
+      })
+      child.stdout!.on('data', (d: Buffer) => sendOutput(d.toString()))
+      child.stderr!.on('data', (d: Buffer) => sendOutput(d.toString()))
+      child.on('close', async (code) => {
+        if (code === 0 && !wingetFailed) {
+          sendExitWithRefresh(0)
+          return
+        }
+        // Fallback: download .msi installer
+        sendOutput('\nwinget not available, downloading Node.js installer...\n')
+        try {
+          const arch = process.arch === 'arm64' ? 'arm64' : 'x64'
+          const indexRes = await net.fetch('https://nodejs.org/dist/index.json')
+          const releases = (await indexRes.json()) as { version: string; lts: string | false }[]
+          const lts = releases.find((r) => r.lts)
+          if (!lts) {
+            sendOutput('Error: Could not determine latest LTS version.\n')
+            sendExit(1)
+            return
+          }
+          const ver = lts.version
+          const msiUrl = `https://nodejs.org/dist/${ver}/node-${ver}-${arch}.msi`
+          sendOutput(`Downloading ${msiUrl}\n`)
+
+          const res = await net.fetch(msiUrl)
+          if (!res.ok) {
+            sendOutput(`Error: Download failed (${res.status})\n`)
+            sendExit(1)
+            return
+          }
+          const buffer = Buffer.from(await res.arrayBuffer())
+          const msiPath = join(app.getPath('temp'), `node-${ver}-${arch}.msi`)
+          writeFileSync(msiPath, buffer)
+          sendOutput('Download complete. Running installer...\n')
+
+          const msi = spawn('msiexec', ['/i', msiPath, '/passive', '/norestart'], {
+            stdio: ['ignore', 'pipe', 'pipe'],
+            shell: true,
+          })
+          msi.stdout!.on('data', (d: Buffer) => sendOutput(d.toString()))
+          msi.stderr!.on('data', (d: Buffer) => sendOutput(d.toString()))
+          msi.on('error', (err) => {
+            sendOutput(`Error: ${err.message}\n`)
+            sendExit(1)
+          })
+          msi.on('close', (msiCode) => sendExitWithRefresh(msiCode ?? 1))
+        } catch (err) {
+          sendOutput(`Error: ${err instanceof Error ? err.message : String(err)}\n`)
+          sendExit(1)
+        }
+      })
+    } else {
+      sendOutput('Unsupported platform. Please install Node.js manually.\n')
+      sendExit(1)
+    }
+  })
+
   ipcMain.handle(IPC_CHANNELS.OPENCLAW_INSTALL, async (event) => {
     const isWin = process.platform === 'win32'
     const npm = isWin ? 'npm.cmd' : 'npm'

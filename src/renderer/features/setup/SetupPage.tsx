@@ -206,7 +206,36 @@ export function SetupPage() {
   const channelStatus: SectionStatus = hasChannels ? 'complete' : 'optional'
 
   const handleInstallNode = () => {
-    electron.openLink('https://nodejs.org/')
+    setInstalling(true)
+    setInstallVisible(true)
+    setInstallOutput([t('setup.installNodeCmd')])
+
+    const unsubOutput = electron.onOpenclawInstallOutput((_e, data) => {
+      setInstallOutput((prev) => [...prev, data as string])
+    })
+
+    const unsubExit = electron.onOpenclawInstallExit((_e, code) => {
+      setInstalling(false)
+      setInstallOutput((prev) => [
+        ...prev,
+        code === 0 ? t('setup.installNodeComplete') : t('setup.installNodeFailed', { code: code as number }),
+      ])
+      if (code === 0) {
+        setTimeout(() => {
+          detectEnv()
+          setInstallVisible(false)
+        }, 1500)
+      }
+      unsubOutput()
+      unsubExit()
+    })
+
+    electron.installNode().catch(() => {
+      setInstalling(false)
+      setInstallOutput((prev) => [...prev, t('setup.installProcessError')])
+      unsubOutput()
+      unsubExit()
+    })
   }
 
   const handleInstallOpenclaw = () => {
@@ -328,7 +357,8 @@ export function SetupPage() {
           <StatusRow
             item={nodeStatus}
             onInstall={handleInstallNode}
-            installLabel={t('setup.download')}
+            installLabel={t('setup.install')}
+            installing={installing}
           />
           <StatusRow
             item={openclawStatus}

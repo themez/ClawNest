@@ -22,6 +22,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // ─── OpenClaw ────────────────────────────────────────────────────────────
   detectEnv: () => ipcRenderer.invoke(IPC_CHANNELS.OPENCLAW_DETECT_ENV),
+  installNode: () => ipcRenderer.invoke(IPC_CHANNELS.OPENCLAW_INSTALL_NODE),
   installOpenclaw: () => ipcRenderer.invoke(IPC_CHANNELS.OPENCLAW_INSTALL),
   uninstallOpenclaw: () => ipcRenderer.invoke(IPC_CHANNELS.OPENCLAW_UNINSTALL),
   cliExec: (args: string[]) => ipcRenderer.invoke(IPC_CHANNELS.OPENCLAW_CLI_EXEC, args),

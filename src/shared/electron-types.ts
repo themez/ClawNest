@@ -24,6 +24,7 @@ export interface ElectronIPC {
 
   // OpenClaw
   detectEnv: () => Promise<EnvironmentInfo>
+  installNode: () => Promise<void>
   installOpenclaw: () => Promise<void>
   uninstallOpenclaw: () => Promise<void>
   cliExec: (args: string[]) => Promise<{ stdout: string; stderr: string; exitCode: number }>

@@ -17,6 +17,7 @@ export const IPC_CHANNELS = {
   // OpenClaw
   OPENCLAW_DETECT_ENV: 'openclaw:detect-env',
   OPENCLAW_INSTALL: 'openclaw:install',
+  OPENCLAW_INSTALL_NODE: 'openclaw:install-node',
   OPENCLAW_UNINSTALL: 'openclaw:uninstall',
   OPENCLAW_CLI_EXEC: 'openclaw:cli-exec',
   OPENCLAW_MODELS_STATUS: 'openclaw:models-status',
