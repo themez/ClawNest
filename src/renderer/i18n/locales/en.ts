@@ -227,6 +227,7 @@ export const en = {
   'updater.checkForUpdate': 'Check for Updates',
   'updater.upToDate': 'Already up to date',
   'updater.error': 'Update check failed',
+  'updater.retry': 'Retry',
 
   // Health Card — Channel Details
   'health.channelLinked': 'linked',

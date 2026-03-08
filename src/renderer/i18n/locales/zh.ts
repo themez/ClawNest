@@ -229,6 +229,7 @@ export const zh: Translations = {
   'updater.checkForUpdate': '检查更新',
   'updater.upToDate': '已是最新版本',
   'updater.error': '检查更新失败',
+  'updater.retry': '重试',
 
   // Health Card — Channel Details
   'health.channelLinked': '已连接',

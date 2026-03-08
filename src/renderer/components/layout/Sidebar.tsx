@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { useRouterState, Link } from '@tanstack/react-router'
 import {
   Wand2,
@@ -21,6 +22,11 @@ export function Sidebar() {
   const gatewayConnected = useAppStore((s) => s.gatewayConnected)
   const setLanguage = useAppStore((s) => s.setLanguage)
   const { t, language } = useTranslation()
+  const [appVersion, setAppVersion] = useState('')
+
+  useEffect(() => {
+    window.electronAPI?.getVersion().then((v) => setAppVersion(v))
+  }, [])
 
   const toggleLanguage = () => {
     setLanguage(language === 'en' ? 'zh' : 'en')
@@ -69,6 +75,11 @@ export function Sidebar() {
             </span>
           )}
         </div>
+        {appVersion && (
+          <div className="flex items-center justify-center px-3 py-1 text-[10px] text-muted-foreground/60">
+            {collapsed ? `v${appVersion}` : `ClawNest v${appVersion}`}
+          </div>
+        )}
         <button
           onClick={toggleLanguage}
           className="flex w-full items-center justify-center rounded-lg py-1.5 text-xs text-muted-foreground hover:bg-accent/50 hover:text-foreground"

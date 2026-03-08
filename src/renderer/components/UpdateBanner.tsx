@@ -6,6 +6,7 @@ type UpdateState =
   | { status: 'available'; version: string }
   | { status: 'downloading'; percent: number }
   | { status: 'ready'; version: string }
+  | { status: 'error'; message: string }
 
 export function UpdateBanner() {
   const { t } = useTranslation()
@@ -28,6 +29,10 @@ export function UpdateBanner() {
         setState({ status: 'ready', version })
         setDismissed(false)
       }),
+      api.onUpdaterError((_e: unknown, message: string) => {
+        setState({ status: 'error', message })
+        setDismissed(false)
+      }),
     ]
 
     return () => unsubs.forEach((unsub) => unsub())
@@ -41,6 +46,7 @@ export function UpdateBanner() {
         {state.status === 'available' && t('updater.available', { version: state.version })}
         {state.status === 'downloading' && t('updater.downloading', { percent: state.percent })}
         {state.status === 'ready' && t('updater.ready', { version: state.version })}
+        {state.status === 'error' && t('updater.error')}
       </span>
 
       {state.status === 'ready' && (
@@ -49,6 +55,15 @@ export function UpdateBanner() {
           onClick={() => window.electronAPI?.installUpdate()}
         >
           {t('updater.install')}
+        </button>
+      )}
+
+      {state.status === 'error' && (
+        <button
+          className="rounded bg-blue-600 px-3 py-1 text-xs font-medium text-white hover:bg-blue-700"
+          onClick={() => window.electronAPI?.checkForUpdate()}
+        >
+          {t('updater.retry')}
         </button>
       )}
 
